@@ -1,0 +1,13 @@
+{
+  "name": "generated-tests-repo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-generated Playwright tests for the CallCenter helpdesk portal, committed by the AI Testing Platform (ai-test-framework/). This repo is the hand-off point for the future CI/CD phase.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}
