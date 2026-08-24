@@ -1,0 +1,9 @@
+node_modules/
+dist/
+runs/
+.cache/
+.env
+*.log
+data/
+web/dist/
+.playwright-mcp/
