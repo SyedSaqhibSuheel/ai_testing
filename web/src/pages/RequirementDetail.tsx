@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
-import type { Scenario, TestFile } from "@/lib/types";
+import type { Scenario, TestFile, TestRunCase } from "@/lib/types";
 
 function Section({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
@@ -162,6 +162,135 @@ function ScenarioCard({ scenario, requirementId }: { scenario: Scenario; require
   );
 }
 
+function formatDuration(ms: number | null): string {
+  if (ms == null) return "-";
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+function TestRunCaseRow({ testCase }: { testCase: TestRunCase }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-border first:border-t-0">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-panel-2">
+        <span className="text-left">
+          {testCase.suiteTitle && <span className="text-muted">{testCase.suiteTitle} &rsaquo; </span>}
+          {testCase.title}
+        </span>
+        <span className="flex items-center gap-2 shrink-0 ml-3">
+          <span className="text-muted mono">{formatDuration(testCase.durationMs)}</span>
+          <StatusBadge status={testCase.status} />
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2 text-xs">
+          {testCase.errorMessage && (
+            <pre className="mono bg-black/40 border border-fail/30 text-fail rounded-md p-2.5 overflow-x-auto whitespace-pre-wrap">{testCase.errorMessage}</pre>
+          )}
+          <div className="flex flex-wrap gap-3">
+            {testCase.screenshotPath && (
+              <a href={`/artifacts/${testCase.screenshotPath}`} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                Screenshot
+              </a>
+            )}
+            {testCase.tracePath && (
+              <a href={`/artifacts/${testCase.tracePath}`} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                Download trace ({`npx playwright show-trace <file>`})
+              </a>
+            )}
+          </div>
+          {testCase.screenshotPath && (
+            <a href={`/artifacts/${testCase.screenshotPath}`} target="_blank" rel="noreferrer">
+              <img src={`/artifacts/${testCase.screenshotPath}`} alt="Failure screenshot" className="max-w-sm rounded border border-border" />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boolean }) {
+  const queryClient = useQueryClient();
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+
+  const { data: runs } = useQuery({
+    queryKey: ["test-runs", fileId],
+    queryFn: () => api.listTestRuns(fileId),
+    refetchInterval: (query) => (query.state.data?.some((r) => r.status === "running") ? 2000 : false),
+  });
+
+  const run = useMutation({
+    mutationFn: () => api.runTestFile(fileId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["test-runs", fileId] }),
+  });
+
+  const latest = runs?.[0];
+  const isRunning = latest?.status === "running";
+
+  const { data: detail } = useQuery({
+    queryKey: ["test-run", expandedRunId],
+    queryFn: () => api.getTestRun(expandedRunId!),
+    enabled: !!expandedRunId,
+  });
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted">CI/CD: run &amp; report</div>
+        <Button
+          variant="secondary"
+          onClick={() => run.mutate()}
+          disabled={!committed || run.isPending || isRunning}
+          title={!committed ? "Commit this file to Git before running it" : undefined}
+        >
+          {isRunning ? "Running..." : "Run Test"}
+        </Button>
+      </div>
+
+      {!runs || runs.length === 0 ? (
+        <div className="text-xs text-muted">No test runs yet - commit this file, then click Run Test for a real pass/fail report.</div>
+      ) : (
+        <Card className="divide-y divide-border">
+          {runs.map((r) => (
+            <div key={r.id}>
+              <button
+                onClick={() => setExpandedRunId(expandedRunId === r.id ? null : r.id)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-xs hover:bg-panel-2"
+              >
+                <span className="flex items-center gap-2">
+                  <StatusBadge status={r.status} />
+                  <span className="text-muted">{r.triggeredBy === "auto_after_commit" ? "auto (after commit)" : "manual"}</span>
+                </span>
+                <span className="flex items-center gap-3 text-muted">
+                  {r.totalTests != null && (
+                    <span className="mono">
+                      <span className="text-pass">{r.passedCount}</span>/{r.totalTests} passed
+                    </span>
+                  )}
+                  <span className="mono">{formatDuration(r.durationMs)}</span>
+                  <span>{new Date(r.startedAt).toLocaleString()}</span>
+                </span>
+              </button>
+              {expandedRunId === r.id && (
+                <div className="px-3 pb-3">
+                  {r.errorMessage && <div className="text-xs text-fail mb-2">{r.errorMessage}</div>}
+                  {detail?.run.id === r.id && detail.cases.length > 0 && (
+                    <div className="border border-border rounded-md overflow-hidden">
+                      {detail.cases.map((c) => (
+                        <TestRunCaseRow key={c.id} testCase={c} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: string }) {
   const queryClient = useQueryClient();
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -215,6 +344,10 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
         <Button variant="secondary" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
           {regenerate.isPending ? "Regenerating..." : "Regenerate"}
         </Button>
+      </div>
+
+      <div className="pt-2 border-t border-border">
+        <TestRunsPanel fileId={file.id} committed={file.status === "committed"} />
       </div>
 
       <Modal open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject generated test">

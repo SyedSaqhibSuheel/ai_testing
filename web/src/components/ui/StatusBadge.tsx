@@ -26,6 +26,12 @@ const COLOR_MAP: Record<string, string> = {
   running: "bg-accent/15 text-accent border-accent/30",
   completed: "bg-pass/15 text-pass border-pass/30",
   cancelled: "bg-panel-2 text-muted border-border",
+  // test run / test run case
+  passed: "bg-pass/15 text-pass border-pass/30",
+  error: "bg-fail/15 text-fail border-fail/30",
+  timedOut: "bg-fail/15 text-fail border-fail/30",
+  skipped: "bg-panel-2 text-muted border-border",
+  interrupted: "bg-warn/15 text-warn border-warn/30",
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

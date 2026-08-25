@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
-import { requirements, scenarios, testFiles, gitCommits, agentRuns, type RequirementStatus } from "../db/schema.js";
+import { requirements, scenarios, testFiles, gitCommits, agentRuns, testRuns, type RequirementStatus } from "../db/schema.js";
 
 const PIPELINE_STAGES: { key: string; label: string; statuses: RequirementStatus[] }[] = [
   { key: "requirement", label: "Requirement", statuses: ["submitted"] },
@@ -23,6 +23,7 @@ export function dashboardRouter(db: Db): Router {
     const allTestFiles = db.select().from(testFiles).where(eq(testFiles.isLatest, true)).all();
     const allCommits = db.select().from(gitCommits).all();
     const allAgentRuns = db.select().from(agentRuns).all();
+    const allTestRuns = db.select().from(testRuns).all();
 
     const pipeline = PIPELINE_STAGES.map((stage) => ({
       key: stage.key,
@@ -48,6 +49,10 @@ export function dashboardRouter(db: Db): Router {
       commitsTotal: allCommits.length,
       agentJobsRunning: allAgentRuns.filter((r) => r.status === "running" || r.status === "queued").length,
       agentJobsFailed: allAgentRuns.filter((r) => r.status === "failed").length,
+      testRunsTotal: allTestRuns.length,
+      testRunsPassed: allTestRuns.filter((r) => r.status === "passed").length,
+      testRunsFailed: allTestRuns.filter((r) => r.status === "failed" || r.status === "error").length,
+      testRunsInProgress: allTestRuns.filter((r) => r.status === "running").length,
       pipeline,
     });
   });

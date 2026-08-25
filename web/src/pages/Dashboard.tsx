@@ -39,6 +39,16 @@ export function Dashboard() {
         </div>
 
         <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">CI/CD test execution</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Test runs total" value={data?.testRunsTotal ?? 0} />
+            <StatCard label="Runs passed" value={data?.testRunsPassed ?? 0} tone="pass" />
+            <StatCard label="Runs failed" value={data?.testRunsFailed ?? 0} tone={data?.testRunsFailed ? "fail" : undefined} />
+            <StatCard label="In progress" value={data?.testRunsInProgress ?? 0} tone="warn" />
+          </div>
+        </div>
+
+        <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Pipeline</h2>
           <Card className="p-5 overflow-x-auto">
             <div className="flex items-stretch gap-1 min-w-max">

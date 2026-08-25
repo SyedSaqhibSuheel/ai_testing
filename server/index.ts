@@ -9,6 +9,7 @@ import { planRouter } from "./routes/plan.js";
 import { testFilesRouter, generateRouter } from "./routes/testFiles.js";
 import { gitRouter } from "./routes/git.js";
 import { dashboardRouter } from "./routes/dashboard.js";
+import { testRunsRouter, runTestRouter } from "./routes/testRuns.js";
 import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
@@ -27,9 +28,17 @@ app.use("/api/settings", settingsRouter(db, config));
 app.use("/api/agent-runs", agentRunsRouter(db));
 app.use("/api", planRouter(db, config));
 app.use("/api/test-files", testFilesRouter(db, config));
+app.use("/api/test-files", runTestRouter(db, config));
 app.use("/api", generateRouter(db, config));
 app.use("/api/git", gitRouter(db, config));
+app.use("/api/test-runs", testRunsRouter(db, config));
 app.use("/api/dashboard", dashboardRouter(db));
+
+// Screenshots/traces from test runs. Mounted at the repo root (not
+// test-results/ directly) so a case's stored `screenshotPath`/`tracePath`
+// (relative to managedRepoDir, e.g. "test-results/<runId>/.../trace.zip")
+// can be used as-is: GET /artifacts/<that path>.
+app.use("/artifacts", express.static(config.managedRepoDir));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, llmProvider: config.llmProvider });

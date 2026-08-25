@@ -10,6 +10,8 @@ import type {
   Scenario,
   TestFile,
   TestFileScenarioMapping,
+  TestRun,
+  TestRunCase,
 } from "./types";
 
 export const queryClient = new QueryClient({
@@ -67,6 +69,11 @@ export const api = {
   rejectTestFile: (id: string, reason: string) =>
     request<TestFile>(`/test-files/${id}/reject`, { method: "POST", body: JSON.stringify({ actor: currentActor(), reason }) }),
   regenerateTestFile: (id: string) => request<TestFile>(`/test-files/${id}/regenerate`, { method: "POST" }),
+  runTestFile: (id: string) => request(`/test-files/${id}/run`, { method: "POST" }),
+
+  // Test runs (CI/CD: real `npx playwright test` execution + report)
+  listTestRuns: (testFileId?: string) => request<TestRun[]>(`/test-runs${testFileId ? `?testFileId=${testFileId}` : ""}`),
+  getTestRun: (id: string) => request<{ run: TestRun; cases: TestRunCase[] }>(`/test-runs/${id}`),
 
   // Git
   getGitStatus: () => request<{ dir: string; branch: string; changedFiles: string[]; isClean: boolean }>("/git/status"),
