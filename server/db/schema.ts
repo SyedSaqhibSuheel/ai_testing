@@ -215,6 +215,16 @@ export const testRunCases = sqliteTable("test_run_cases", {
   tracePath: text("trace_path"),
   stdout: json<string[]>("stdout").notNull().default([]),
   stderr: json<string[]>("stderr").notNull().default([]),
+  // Set only for failed/timedOut cases, by server/analysis/classifyTestFailure.ts
+  // right after the run - null means "passed" or "not yet classified".
+  classification: text("classification").$type<
+    "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE"
+  >(),
+  classificationConfidence: real("classification_confidence"),
+  classificationEvidenceKind: text("classification_evidence_kind"),
+  classificationEvidence: json<string[]>("classification_evidence"),
+  classificationReasoning: text("classification_reasoning"),
+  suggestedFix: text("suggested_fix"),
 });
 
 // ---------------------------------------------------------------------------

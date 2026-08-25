@@ -32,6 +32,12 @@ const COLOR_MAP: Record<string, string> = {
   timedOut: "bg-fail/15 text-fail border-fail/30",
   skipped: "bg-panel-2 text-muted border-border",
   interrupted: "bg-warn/15 text-warn border-warn/30",
+  // failure classification (only REAL_DEFECT is flagged as a "Bug" in the UI)
+  REAL_DEFECT: "bg-fail/15 text-fail border-fail/30",
+  ENVIRONMENT_ERROR: "bg-accent/15 text-accent border-accent/30",
+  TEST_SCRIPT_ERROR: "bg-panel-2 text-muted border-border",
+  UI_LOCATOR_CHANGE: "bg-warn/15 text-warn border-warn/30",
+  INCONCLUSIVE: "bg-panel-2 text-muted border-border",
 };
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {

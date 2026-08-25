@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { testFiles, testRuns, testRunCases } from "../db/schema.js";
+import { classifyTestFailure } from "../analysis/classifyTestFailure.js";
 
 // Real, deterministic Playwright execution - no LLM involved. This is the
 // "CI/CD runs the code, report appears in the dashboard" half of the flow;
@@ -128,6 +129,7 @@ export async function runPlaywrightTest(
     let passed = 0;
     let failed = 0;
     let skipped = 0;
+    const failedCaseIds: string[] = [];
 
     for (const { spec, suiteTitle } of specs) {
       const result = spec.tests[0]?.results[0];
@@ -140,7 +142,8 @@ export async function runPlaywrightTest(
       const screenshot = result.attachments?.find((a) => a.name === "screenshot");
       const trace = result.attachments?.find((a) => a.name === "trace");
 
-      db.insert(testRunCases)
+      const caseRow = db
+        .insert(testRunCases)
         .values({
           testRunId: runId,
           suiteTitle,
@@ -154,7 +157,10 @@ export async function runPlaywrightTest(
           stdout: stringifyStd(result.stdout),
           stderr: stringifyStd(result.stderr),
         })
-        .run();
+        .returning({ id: testRunCases.id })
+        .get();
+
+      if (status === "failed" || status === "timedOut") failedCaseIds.push(caseRow.id);
     }
 
     db.update(testRuns)
@@ -169,6 +175,17 @@ export async function runPlaywrightTest(
       })
       .where(eq(testRuns.id, runId))
       .run();
+
+    // Classify each failure (real defect vs locator drift vs bad test vs
+    // environment down) so only genuine REAL_DEFECT cases surface as a "Bug"
+    // in the dashboard - sequential to respect free-tier LLM rate limits.
+    // Best-effort: a classification failure shouldn't affect the run's own
+    // recorded pass/fail result, which is already finalized above.
+    for (const caseId of failedCaseIds) {
+      await classifyTestFailure(db, config, caseId).catch((err) => {
+        console.error(`Failed to classify test run case ${caseId}:`, err);
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     db.update(testRuns).set({ status: "error", errorMessage: message, finishedAt: new Date() }).where(eq(testRuns.id, runId)).run();

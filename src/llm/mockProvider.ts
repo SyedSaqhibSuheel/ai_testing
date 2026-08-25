@@ -154,6 +154,29 @@ export function createMockProvider(appBaseUrl: string): LlmProvider {
           return { text: JSON.stringify(classification, null, 2), toolCalls: [], stopReason: "end_turn" };
         }
 
+        if (/MOCK_TASK:\s*test_failure_classify/.test(systemText)) {
+          const haystack = messages.map((m) => m.text ?? "").join("\n");
+          const looksLikeConnectionFailure = /ERR_CONNECTION_REFUSED|ECONNREFUSED|net::ERR_/.test(haystack);
+          const classification = looksLikeConnectionFailure
+            ? {
+                classification: "ENVIRONMENT_ERROR",
+                confidence: 0.9,
+                evidenceKind: "HTTP_STATUS",
+                evidence: ["The real Playwright error indicates a connection-refused/network-level failure."],
+                reasoning: "The app under test was unreachable, which is checked first and never treated as a product defect.",
+                suggestedFix: "Confirm APP_BASE_URL is correct and the app is actually running, then re-run.",
+              }
+            : {
+                classification: "INCONCLUSIVE",
+                confidence: 0.3,
+                evidenceKind: "NARRATIVE_INFERENCE",
+                evidence: ["LLM_PROVIDER=mock - no real model was consulted for this classification."],
+                reasoning: "Running in mock mode: this is a deterministic placeholder verdict used to verify pipeline wiring, not a real defect analysis.",
+                suggestedFix: "Set LLM_PROVIDER=anthropic/openai/gemini with a real API key to get an actual classification.",
+              };
+          return { text: JSON.stringify(classification, null, 2), toolCalls: [], stopReason: "end_turn" };
+        }
+
         return { text: "{}", toolCalls: [], stopReason: "end_turn" };
       }
 

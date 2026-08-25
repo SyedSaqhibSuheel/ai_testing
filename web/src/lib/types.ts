@@ -189,6 +189,8 @@ export interface TestRun {
   errorMessage: string | null;
 }
 
+export type DefectClass = "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE";
+
 export interface TestRunCase {
   id: string;
   testRunId: string;
@@ -202,6 +204,12 @@ export interface TestRunCase {
   tracePath: string | null;
   stdout: string[];
   stderr: string[];
+  classification: DefectClass | null;
+  classificationConfidence: number | null;
+  classificationEvidenceKind: string | null;
+  classificationEvidence: string[] | null;
+  classificationReasoning: string | null;
+  suggestedFix: string | null;
 }
 
 export interface DashboardSummary {
@@ -220,5 +228,6 @@ export interface DashboardSummary {
   testRunsPassed: number;
   testRunsFailed: number;
   testRunsInProgress: number;
+  bugsFound: number;
   pipeline: { key: string; label: string; count: number }[];
 }

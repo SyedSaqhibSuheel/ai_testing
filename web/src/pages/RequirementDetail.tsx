@@ -167,14 +167,26 @@ function formatDuration(ms: number | null): string {
   return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 }
 
+function BugFlag() {
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-fail text-white" title="Classified as a real product defect">
+      🐛 Bug
+    </span>
+  );
+}
+
 function TestRunCaseRow({ testCase }: { testCase: TestRunCase }) {
   const [open, setOpen] = useState(false);
+  const isBug = testCase.classification === "REAL_DEFECT";
   return (
     <div className="border-t border-border first:border-t-0">
       <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-panel-2">
-        <span className="text-left">
-          {testCase.suiteTitle && <span className="text-muted">{testCase.suiteTitle} &rsaquo; </span>}
-          {testCase.title}
+        <span className="text-left flex items-center gap-2">
+          {isBug && <BugFlag />}
+          <span>
+            {testCase.suiteTitle && <span className="text-muted">{testCase.suiteTitle} &rsaquo; </span>}
+            {testCase.title}
+          </span>
         </span>
         <span className="flex items-center gap-2 shrink-0 ml-3">
           <span className="text-muted mono">{formatDuration(testCase.durationMs)}</span>
@@ -185,6 +197,27 @@ function TestRunCaseRow({ testCase }: { testCase: TestRunCase }) {
         <div className="px-3 pb-3 space-y-2 text-xs">
           {testCase.errorMessage && (
             <pre className="mono bg-black/40 border border-fail/30 text-fail rounded-md p-2.5 overflow-x-auto whitespace-pre-wrap">{testCase.errorMessage}</pre>
+          )}
+          {testCase.classification && (
+            <div className={`rounded-md border p-2.5 space-y-1.5 ${isBug ? "border-fail/40 bg-fail/5" : "border-border bg-panel-2"}`}>
+              <div className="flex items-center gap-2">
+                {isBug && <BugFlag />}
+                <StatusBadge status={testCase.classification} />
+                {testCase.classificationConfidence != null && (
+                  <span className="text-muted">{Math.round(testCase.classificationConfidence * 100)}% confidence</span>
+                )}
+                {testCase.classificationEvidenceKind && (
+                  <span className="text-muted">&middot; {testCase.classificationEvidenceKind.replace(/_/g, " ").toLowerCase()}</span>
+                )}
+              </div>
+              {testCase.classificationReasoning && <div>{testCase.classificationReasoning}</div>}
+              {testCase.suggestedFix && (
+                <div>
+                  <span className="text-muted">Suggested fix: </span>
+                  {testCase.suggestedFix}
+                </div>
+              )}
+            </div>
           )}
           <div className="flex flex-wrap gap-3">
             {testCase.screenshotPath && (

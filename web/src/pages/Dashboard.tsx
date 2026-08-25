@@ -45,6 +45,7 @@ export function Dashboard() {
             <StatCard label="Runs passed" value={data?.testRunsPassed ?? 0} tone="pass" />
             <StatCard label="Runs failed" value={data?.testRunsFailed ?? 0} tone={data?.testRunsFailed ? "fail" : undefined} />
             <StatCard label="In progress" value={data?.testRunsInProgress ?? 0} tone="warn" />
+            <StatCard label="🐛 Bugs found" value={data?.bugsFound ?? 0} tone={data?.bugsFound ? "fail" : undefined} />
           </div>
         </div>
 
