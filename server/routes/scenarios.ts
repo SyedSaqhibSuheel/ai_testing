@@ -2,11 +2,12 @@ import { Router } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
+import { URLConfigService } from "../config/urlConfigService.js";
 import { scenarios } from "../db/schema.js";
 import { approveScenario, rejectScenario, deleteScenario, editScenario } from "../scenarios/scenarioTransitions.js";
 import { regenerateScenario } from "../agents/intelligenceAgent.js";
 
-export function scenariosRouter(db: Db, config: Config): Router {
+export function scenariosRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
@@ -103,9 +104,13 @@ export function scenariosRouter(db: Db, config: Config): Router {
   router.post("/:id/regenerate", async (req, res) => {
     try {
       const { actor, feedback } = req.body ?? {};
-      const newId = await regenerateScenario(db, config, req.params.id, typeof actor === "string" ? actor : "unknown", feedback);
+      if (!urlConfigService) {
+        return res.status(500).json({ error: "URL Config Service not initialized" });
+      }
+      const newId = await regenerateScenario(db, config, req.params.id, typeof actor === "string" ? actor : "unknown", feedback, urlConfigService);
       res.json(db.select().from(scenarios).where(eq(scenarios.id, newId)).get());
     } catch (err) {
+      console.error("[Regenerate Error]", err);
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
