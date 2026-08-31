@@ -214,6 +214,7 @@ export function Dashboard() {
           <KPICard label="Failed Tests" value={failed} change="↑ 12 from last period" trend="up" tone={failed > 0 ? "fail" : undefined} />
         </div>
 
+
         {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ChartContainer title="Test Distribution">
@@ -234,6 +235,33 @@ export function Dashboard() {
                       style={{ width: `${Math.min((stage.count / Math.max(...data.pipeline.map((s) => s.count), 1)) * 100, 100)}%` }}
                     />
                   </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">CI/CD test execution</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard label="Test runs total" value={data?.testRunsTotal ?? 0} />
+            <StatCard label="Runs passed" value={data?.testRunsPassed ?? 0} tone="pass" />
+            <StatCard label="Runs failed" value={data?.testRunsFailed ?? 0} tone={data?.testRunsFailed ? "fail" : undefined} />
+            <StatCard label="In progress" value={data?.testRunsInProgress ?? 0} tone="warn" />
+            <StatCard label="🐛 Bugs found" value={data?.bugsFound ?? 0} tone={data?.bugsFound ? "fail" : undefined} />
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Pipeline</h2>
+          <Card className="p-5 overflow-x-auto">
+            <div className="flex items-stretch gap-1 min-w-max">
+              {data?.pipeline.map((stage, i) => (
+                <div key={stage.key} className="flex items-stretch">
+                  <Link
+                    to="/requirements"
+                    className="flex flex-col items-center justify-center gap-1.5 px-4 py-3 rounded-md hover:bg-panel-2 transition-colors min-w-[110px] text-center"
+                  >
+                    <div className="text-xl font-bold">{stage.count}</div>
+                    <div className="text-[11px] text-muted whitespace-nowrap">{stage.label}</div>
+                  </Link>
+                  {i < data.pipeline.length - 1 && <div className="flex items-center text-muted px-1">&rarr;</div>}
+
                 </div>
               ))}
             </div>

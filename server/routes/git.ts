@@ -4,6 +4,7 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { gitCommits } from "../db/schema.js";
 import { getRepoStatus, getCommitHistory, commitApprovedTestFiles } from "../git/managedRepo.js";
+import { runPlaywrightTest } from "../execution/runTests.js";
 
 export function gitRouter(db: Db, config: Config): Router {
   const router = Router();
@@ -41,6 +42,14 @@ export function gitRouter(db: Db, config: Config): Router {
     }
     try {
       const result = await commitApprovedTestFiles(db, config, testFileIds, message, typeof author === "string" ? author : "unknown");
+      // "Commit to Git -> CI/CD runs the code -> report appears in the
+      // dashboard": fire-and-forget so the commit response isn't held up by
+      // a real browser test run. The client polls GET /api/test-runs.
+      for (const id of testFileIds) {
+        runPlaywrightTest(db, config, id, "auto_after_commit").catch((err) => {
+          console.error(`Auto test run failed for test file ${id}:`, err);
+        });
+      }
       res.status(201).json(result);
     } catch (err) {
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });

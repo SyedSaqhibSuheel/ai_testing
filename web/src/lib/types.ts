@@ -170,6 +170,48 @@ export interface GitCommitRecord {
   committedAt: string;
 }
 
+export type TestRunStatus = "running" | "passed" | "failed" | "error";
+export type TestRunTrigger = "manual" | "auto_after_commit";
+
+export interface TestRun {
+  id: string;
+  testFileId: string;
+  triggeredBy: TestRunTrigger;
+  status: TestRunStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  totalTests: number | null;
+  passedCount: number | null;
+  failedCount: number | null;
+  skippedCount: number | null;
+  artifactsDir: string | null;
+  errorMessage: string | null;
+}
+
+export type DefectClass = "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE";
+
+export interface TestRunCase {
+  id: string;
+  testRunId: string;
+  suiteTitle: string | null;
+  title: string;
+  status: "passed" | "failed" | "timedOut" | "skipped" | "interrupted";
+  durationMs: number;
+  errorMessage: string | null;
+  errorStack: string | null;
+  screenshotPath: string | null;
+  tracePath: string | null;
+  stdout: string[];
+  stderr: string[];
+  classification: DefectClass | null;
+  classificationConfidence: number | null;
+  classificationEvidenceKind: string | null;
+  classificationEvidence: string[] | null;
+  classificationReasoning: string | null;
+  suggestedFix: string | null;
+}
+
 export interface DashboardSummary {
   totalRequirements: number;
   requirementsInProgress: number;
@@ -182,5 +224,10 @@ export interface DashboardSummary {
   commitsTotal: number;
   agentJobsRunning: number;
   agentJobsFailed: number;
+  testRunsTotal: number;
+  testRunsPassed: number;
+  testRunsFailed: number;
+  testRunsInProgress: number;
+  bugsFound: number;
   pipeline: { key: string; label: string; count: number }[];
 }
