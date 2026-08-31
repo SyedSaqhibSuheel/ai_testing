@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/PageHeader";
+import { URLConfigPanel } from "@/components/URLConfigPanel";
 import type { ApprovalMode } from "@/lib/types";
 
 const MODES: { value: ApprovalMode; label: string; description: string }[] = [
@@ -142,6 +143,11 @@ export function SettingsPage() {
               <span className="mono text-xs">{settings.apiBaseUrl}</span>
             </div>
           </Card>
+        </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Environment configuration</h2>
+          <URLConfigPanel />
         </div>
       </div>
     </div>

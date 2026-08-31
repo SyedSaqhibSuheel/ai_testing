@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { queryClient } from "@/lib/api";
 import App from "./App";
 import "./index.css";
+import '@/styles/theme.css';
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
