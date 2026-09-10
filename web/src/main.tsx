@@ -1,21 +1,20 @@
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { queryClient } from "@/lib/api";
-import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import App from "./App";
 import "./index.css";
-import '@/styles/theme.css';
 
 createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ThemeProvider>
-  </StrictMode>
+ <StrictMode>
+  <ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </QueryClientProvider>
+  </ThemeProvider>
+</StrictMode>
 );

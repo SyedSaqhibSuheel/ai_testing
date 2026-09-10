@@ -1,63 +1,220 @@
 @import "tailwindcss";
 
-/* Class-based dark mode: ThemeProvider toggles `.light` / `.dark` on <html>.
-   Dark is the default look; `.light` overrides the palette below. */
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme {
-  --color-bg: #0a0b0f;
-  --color-panel: #12141a;
-  --color-panel-2: #171a21;
-  --color-border: #23262f;
-  --color-border-hover: #2f333e;
-  --color-text: #eef0f4;
-  --color-muted: #8b91a0;
-  --color-muted-2: #5f6472;
-  --color-accent: #6366f1;
-  --color-accent-hover: #7678f4;
-  --color-pass: #22c55e;
-  --color-fail: #f4485e;
-  --color-warn: #f0a83c;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-pass: hsl(var(--pass));
+  --color-fail: hsl(var(--fail));
+  --color-warn: hsl(var(--warn));
+
+    /* Existing app color aliases */
+  --color-bg: hsl(var(--background));
+  --color-panel: hsl(var(--card));
+  --color-panel-2: hsl(var(--secondary));
+  --color-border-hover: hsl(var(--muted-foreground));
+
+  --color-text: hsl(var(--foreground));
+  --color-muted: hsl(var(--muted-foreground));
+  --color-muted-2: hsl(var(--muted-foreground));
+
+  --color-accent-hover: hsl(var(--accent));
+
+  --color-pass: hsl(var(--pass));
+  --color-fail: hsl(var(--fail));
+  --color-warn: hsl(var(--warn));
 }
 
-/* Light palette - applied when <html> has the `.light` class. Accent/status
-   colours are shared; only the neutrals flip. */
-html.light {
-  --color-bg: #f6f7f9;
-  --color-panel: #ffffff;
-  --color-panel-2: #eef0f3;
-  --color-border: #e2e5ea;
-  --color-border-hover: #cbd0d9;
-  --color-text: #1a1c22;
-  --color-muted: #5f6472;
-  --color-muted-2: #8b91a0;
-  --color-accent: #6366f1;
-  --color-accent-hover: #4f46e5;
+:root {
+  --background: 240 10% 98%;
+  --foreground: 240 10% 10%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 10%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 10%;
+
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 6% 94%;
+  --secondary-foreground: 240 10% 15%;
+
+  --muted: 240 5% 94%;
+  --muted-foreground: 240 5% 45%;
+
+  --accent: 326 78% 58%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 55%;
+
+  --border: 240 6% 88%;
+  --input: 240 6% 88%;
+  --ring: 262 83% 58%;
+
+  --pass: 142 71% 42%;
+  --fail: 0 72% 55%;
+  --warn: 38 92% 50%;
 }
 
-html.light { color-scheme: light; }
-html.dark { color-scheme: dark; }
+.dark {
+  --background: 240 10% 4%;
+  --foreground: 240 10% 96%;
+
+  --card: 240 8% 7%;
+  --card-foreground: 240 10% 96%;
+
+  --popover: 240 8% 7%;
+  --popover-foreground: 240 10% 96%;
+
+  --primary: 262 83% 65%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 240 7% 11%;
+  --secondary-foreground: 240 10% 94%;
+
+  --muted: 240 7% 11%;
+  --muted-foreground: 240 5% 62%;
+
+  --accent: 326 78% 63%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 60%;
+
+  --border: 240 6% 16%;
+  --input: 240 6% 16%;
+  --ring: 262 83% 65%;
+
+  --pass: 142 71% 50%;
+  --fail: 0 72% 60%;
+  --warn: 38 92% 55%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
 
 body {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  margin: 0;
+  min-width: 320px;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
 }
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-hover);
-  border-radius: 8px;
-  border: 2px solid var(--color-bg);
+  background: hsl(var(--border));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+/* Dashboard ambient background */
+
+.dashboard-orb {
+  position: absolute;
+  width: 360px;
+  height: 360px;
+  border-radius: 999px;
+  filter: blur(110px);
+  pointer-events: none;
+  opacity: 0.12;
+  animation: dashboardFloat 12s ease-in-out infinite;
+}
+
+.dashboard-orb-purple {
+  background: hsl(var(--primary));
+  top: 40px;
+  right: -100px;
+}
+
+.dashboard-orb-pink {
+  background: hsl(var(--accent));
+  top: 520px;
+  left: 20%;
+  width: 280px;
+  height: 280px;
+  animation-delay: -5s;
+}
+
+@keyframes dashboardFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(20px, -20px, 0) scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-orb,
+  .animate-pulse,
+  .animate-ping {
+    animation: none !important;
+  }
 }

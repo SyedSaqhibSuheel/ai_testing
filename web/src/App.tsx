@@ -1,8 +1,8 @@
 import { Routes, Route } from "react-router-dom";
-import { LayoutModern } from "@/components/LayoutModern";
+import { Layout } from "@/components/Layout";
 import { useAgentRunStream } from "@/lib/useAgentRunStream";
 import { Dashboard } from "@/pages/Dashboard";
-import { RequirementsModern } from "@/pages/RequirementsModern";
+import { Requirements } from "@/pages/Requirements";
 import { RequirementDetail } from "@/pages/RequirementDetail";
 import { Scenarios } from "@/pages/Scenarios";
 import { TestFiles } from "@/pages/TestFiles";
@@ -15,9 +15,9 @@ export default function App() {
 
   return (
     <Routes>
-      <Route element={<LayoutModern />}>
+      <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/requirements" element={<RequirementsModern />} />
+        <Route path="/requirements" element={<Requirements />} />
         <Route path="/requirements/:id" element={<RequirementDetail />} />
         <Route path="/scenarios" element={<Scenarios />} />
         <Route path="/test-files" element={<TestFiles />} />
