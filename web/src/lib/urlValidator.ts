@@ -30,17 +30,17 @@ export function validateURL(urlString: string): URLValidationResult {
     return { isValid: false, errors, warnings };
   }
 
-  // Check for required protocol
-  if (!urlString.match(/^https?:\/\//i)) {
-    errors.push('URL must start with http:// or https://');
-  }
-
   try {
-    // eslint-disable-next-line no-new
-    new URL(urlString);
-
-    // Warnings
+    // Use the URL constructor - most reliable way to validate
     const url = new URL(urlString);
+
+    // Check for valid protocol (http or https)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      errors.push('URL must use http:// or https:// protocol');
+      return { isValid: false, errors, warnings };
+    }
+
+    // Warnings for non-localhost HTTP URLs
     if (url.protocol === 'http:' && !url.hostname.match(/localhost|127\.0\.0\.1|::1/)) {
       warnings.push('Using HTTP for external URLs is not recommended - use HTTPS');
     }

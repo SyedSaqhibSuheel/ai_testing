@@ -22,6 +22,10 @@ export default defineConfig({
         target: "http://localhost:4701",
         changeOrigin: true,
       },
+      "/artifacts": {
+        target: "http://localhost:4701",
+        changeOrigin: true,
+      },
     },
   },
 });

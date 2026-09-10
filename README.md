@@ -4,14 +4,16 @@ An **AI Testing Platform** for the **fidar-server** (Spring Boot) and
 **CallCenterUI** (React) repos that live alongside this directory. Neither
 repo is ever modified - they're strictly the system under test.
 
-Phase 1 (this build) covers everything up to, but not including, running the
-generated tests: a human enters a requirement, AI agents analyze it into
-scenarios, explore the live app to ground those scenarios into a concrete
-plan, generate real Playwright TypeScript tests from the approved plan, and
-(after approval) commit them to git - all visible and controllable from one
-dashboard, with a configurable Manual / Semi-Automatic / Fully-Automatic
-approval mode. The next phase picks up from the committed tests: CI/CD,
-deterministic execution, pass/fail, and failure healing.
+A human enters a requirement, AI agents analyze it into scenarios, explore
+the live app to ground those scenarios into a concrete plan, generate real
+Playwright TypeScript tests from the approved plan, and (after approval)
+commit them to git - all visible and controllable from one dashboard, with a
+configurable Manual / Semi-Automatic / Fully-Automatic approval mode. Once
+committed, the platform can also run the tests for real (`npx playwright
+test`, no AI involved) and show pass/fail/duration/errors/screenshots/traces
+right in the dashboard - plus a genuine GitHub Actions workflow runs on every
+push for real cloud CI. What's still out of scope: AI-driven failure
+analysis/auto-healing when a test fails - that stays a human job for now.
 
 ## How it works
 
@@ -52,7 +54,12 @@ Git commit  (server/git/managedRepo.ts, via simple-git)  <-- GATE G4
   |  writes the file into ../generated-tests-repo (a separate git repo) and
   |  commits it - fidar-server/ and CallCenterUI/ are never touched
   v
-Ready for CI/CD  <-- Phase 2 starts here (not built yet)
+CI/CD execution  (server/execution/runTests.ts, real `npx playwright test`)
+  |  triggered automatically right after commit, or manually via "Run Test" -
+  |  real deterministic execution, no AI. Also: .github/workflows/playwright.yml
+  |  in the managed repo runs the same suite on every push, for real cloud CI.
+  v
+Report in the dashboard: pass/fail, duration, error, screenshot, trace, history
 ```
 
 Every gate (G1-G4) is a real status transition in SQLite with an audit-log
@@ -126,12 +133,39 @@ Open **http://localhost:5175**. From there:
    regenerate the draft scenarios.
 3. **Run Planner** -> review/approve the grounded plan.
 4. **Generate Tests** -> review the code, approve.
-5. **Commit to Git**.
+5. **Commit to Git** - this automatically kicks off a real test run in the
+   background; watch the **CI/CD: run & report** panel on the same test file
+   for the result (or click **Run Test** any time to re-run manually).
 
 The **Dashboard**, **Scenarios**, **Generated Tests**, **Git**, and **Agent
 Activity** pages give cross-requirement views of the same data. **Settings**
 controls the approval mode and shows (never edits) which provider keys are
 configured.
+
+### CI/CD: running the generated tests for real
+
+Once a test file is `committed`, two things can run it - neither uses AI,
+both are the same real Playwright test runner:
+
+- **From the dashboard** - the platform itself shells out to
+  `npx playwright test` (via the pinned local binary in
+  `generated-tests-repo/node_modules/.bin/playwright`) against
+  `APP_BASE_URL`, either automatically right after a commit or on-demand via
+  the **Run Test** button. Every run is stored (`test_runs`/`test_run_cases`
+  tables) with pass/fail, duration, the real error message/stack per test,
+  and - on failure - a screenshot and a Playwright trace file, all served
+  back to the dashboard at `/artifacts/...` and browsable in the **CI/CD:
+  run & report** panel, with full execution history.
+- **On GitHub** - `generated-tests-repo/.github/workflows/playwright.yml`
+  runs the same suite on every push to `main`, uploading the HTML report as
+  a build artifact. This one needs a `PLAYWRIGHT_BASE_URL` repository
+  variable/secret set in that repo's GitHub settings (Settings -> Secrets
+  and variables -> Actions) - it isn't wired back into this dashboard, it's
+  independent, standard cloud CI.
+
+What's still a manual/human job: if a run fails, there's no AI analysis of
+*why* or auto-generated fix yet - you read the error/screenshot/trace
+yourself. That's the natural next thing to build on top of this.
 
 ## Testing locally
 
@@ -193,6 +227,22 @@ test files auto-approve and it auto-commits.
 
 Reset with `{"approvalMode":"manual"}` afterwards.
 
+**6. CI/CD execution directly**, no dashboard needed - useful when iterating
+on `server/execution/runTests.ts` or the generated test's own logic:
+
+```sh
+curl -s -X POST http://localhost:4701/api/test-files/<committedFileId>/run
+curl -s "http://localhost:4701/api/test-runs?testFileId=<committedFileId>"
+curl -s http://localhost:4701/api/test-runs/<runId>   # per-case detail
+```
+Or skip the platform entirely and run Playwright directly against the
+managed repo, exactly like CI/GitHub Actions does:
+```sh
+cd ../generated-tests-repo
+PLAYWRIGHT_BASE_URL=https://callcenter.fidar.io npx playwright test
+npx playwright show-report   # opens the HTML report
+```
+
 ### Legacy CLI + single-page dashboard
 
 The original CLI (`context`/`plan`/`run-plan`/`all`) and its vanilla-JS
@@ -216,7 +266,13 @@ npm run dashboard                        # view legacy runs at http://localhost:
   `server/db/schema.ts`.
 - `../generated-tests-repo/` is a separate git repository this platform
   commits generated tests into - never `fidar-server/` or `CallCenterUI/`'s
-  own history. It's pushed to `git@github.com:FidarOrg/ai_testing.git`.
+  own history. It's pushed to `git@github.com:FidarOrg/ai_testing.git` and
+  `git@github.com:SyedSaqhibSuheel/ai_testing.git` (`main` and
+  `generated-tests` branches respectively).
+- Test run artifacts (`generated-tests-repo/test-results/`,
+  `playwright-report/`) are gitignored - they're local execution output, not
+  source. Screenshots/traces are served to the dashboard from disk via
+  `/artifacts`, not committed to git.
 - Never point `APP_AUTH_TOKEN`/`APP_LOGIN_*` or any `.env` value at
   fidar-server's local secrets/properties files - supply your own test
   credential. Secrets never appear in the Settings UI, only whether they're

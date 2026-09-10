@@ -39,37 +39,19 @@ export class URLConfigService {
   private initializeDefaultProfiles(): void {
     const defaultProfile = this.manager.getActiveProfile();
 
-    // Add predefined profiles if they don't exist
-    const commonProfiles: EnvironmentProfile[] = [
-      {
-        id: "local",
-        name: "Local Development",
-        appBaseUrl: defaultProfile.appBaseUrl,
-        apiBaseUrl: defaultProfile.apiBaseUrl,
-        isDefault: true,
-        description: "Local development environment",
-      },
-      {
-        id: "staging",
-        name: "Staging",
-        appBaseUrl: "http://localhost:5001",
-        apiBaseUrl: "http://localhost:8085/fidar/sdk/api",
-        description: "Staging environment",
-      },
-      {
-        id: "production",
-        name: "Production",
-        appBaseUrl: "https://app.prod.com",
-        apiBaseUrl: "https://api.prod.com/fidar/sdk/api",
-        description: "Production environment",
-      },
-    ];
+    // Initialize only with the environment config (no hardcoded profiles)
+    const defaultProfile_entry: EnvironmentProfile = {
+      id: "default",
+      name: "Default",
+      appBaseUrl: defaultProfile.appBaseUrl,
+      apiBaseUrl: defaultProfile.apiBaseUrl,
+      isDefault: true,
+      description: "Default environment from configuration",
+    };
 
-    commonProfiles.forEach((profile) => {
-      if (!this.manager.getProfile(profile.id)) {
-        this.manager.setProfile(profile);
-      }
-    });
+    if (!this.manager.getProfile("default")) {
+      this.manager.setProfile(defaultProfile_entry);
+    }
   }
 
   /**

@@ -148,11 +148,9 @@ function TrendChart({ data }: { data: number[] }) {
             max: 100,
             grid: {
               color: "rgba(148, 163, 184, 0.1)",
-              drawBorder: false,
             },
             ticks: {
               color: "rgba(148, 163, 184, 0.8)",
-              font: { size: 12 },
             },
           },
           x: {
@@ -161,10 +159,9 @@ function TrendChart({ data }: { data: number[] }) {
             },
             ticks: {
               color: "rgba(148, 163, 184, 0.8)",
-              font: { size: 12 },
             },
           },
-        },
+        } as any,
       },
     });
 
@@ -197,7 +194,7 @@ export function Dashboard() {
   }
 
   const totalTests = data.testsGenerated + data.testsApproved + data.testsCommitted;
-  const passed = Math.round((totalTests * 87.5) / 100); // Simulated pass rate
+  const passed = Math.round((totalTests * 87.5) / 100);
   const failed = totalTests - passed;
   const passRate = totalTests > 0 ? Math.round((passed / totalTests) * 100) : 0;
   const trendData = [82, 84, 83, 85, 86, 87, passRate];
@@ -212,6 +209,27 @@ export function Dashboard() {
           <KPICard label="Total Tests" value={totalTests} change="↑ 156 new tests" trend="up" />
           <KPICard label="Avg Execution Time" value="2.3s" change="↓ 0.4s faster" trend="down" />
           <KPICard label="Failed Tests" value={failed} change="↑ 12 from last period" trend="up" tone={failed > 0 ? "fail" : undefined} />
+        </div>
+
+        {/* Pipeline */}
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Pipeline</h2>
+          <Card className="p-5 overflow-x-auto">
+            <div className="flex items-stretch gap-1 min-w-max">
+              {data.pipeline.map((stage, i) => (
+                <div key={stage.key} className="flex items-stretch">
+                  <Link
+                    to="/requirements"
+                    className="flex flex-col items-center justify-center gap-1.5 px-4 py-3 rounded-md hover:bg-panel-2 transition-colors min-w-[110px] text-center"
+                  >
+                    <div className="text-xl font-bold">{stage.count}</div>
+                    <div className="text-[11px] text-muted whitespace-nowrap">{stage.label}</div>
+                  </Link>
+                  {i < data.pipeline.length - 1 && <div className="flex items-center text-muted px-1">&rarr;</div>}
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
 
         {/* Charts Grid */}

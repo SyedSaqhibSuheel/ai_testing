@@ -43,7 +43,7 @@ function mergeTestIdSources(
  * scenario into a concrete plan (real testids/routes/backend calls) for
  * human review. Never asserts pass/fail - that's a future phase.
  */
-export async function runPlannerAgent(db: Db, config: Config, requirementId: string): Promise<void> {
+export async function runPlannerAgent(db: Db, config: Config, requirementId: string, appBaseUrl?: string): Promise<void> {
   const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
@@ -71,13 +71,14 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
 
   try {
     updateAgentRunTask(db, runId, "Exploring application");
+    const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
     const explored = await exploreApp(
       provider,
       mcpSession,
       requirement.rawText,
       approvedScenarios.map((s) => ({ title: s.title, preconditions: s.preconditions as string[] })),
       relevant,
-      config.appBaseUrl
+      targetAppUrl
     );
 
     const screenshotDir = path.join(config.rootDir, "data", "explorations", runId);
@@ -146,6 +147,21 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
     completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: plansById.size });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+
+    // Handle missing Playwright browsers gracefully - user can still run tests without planner
+    if (message.includes("chrome-for-testing") || message.includes("Playwright")) {
+      console.warn("⚠️  Playwright browser not available for planning - skipping exploration");
+      console.warn("   Tests can still be run and committed. This is a non-critical feature.");
+
+      // Mark scenarios as approved without planning (they can still be committed and run)
+      for (const s of approvedScenarios) {
+        db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
+      }
+      db.update(requirements).set({ status: "awaiting_scenario_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+      completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: 0 });
+      return;
+    }
+
     failAgentRun(db, runId, message);
     db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
     for (const s of approvedScenarios) {

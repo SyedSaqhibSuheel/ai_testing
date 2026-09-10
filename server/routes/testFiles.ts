@@ -5,8 +5,9 @@ import type { Config } from "../../src/config.js";
 import { requirements, testFiles, testFileScenarios } from "../db/schema.js";
 import { runGeneratorAgent } from "../agents/generatorAgent.js";
 import { approveTestFile, rejectTestFile } from "../testFiles/testFileTransitions.js";
+import type { URLConfigService } from "../config/urlConfigService.js";
 
-export function testFilesRouter(db: Db, config: Config): Router {
+export function testFilesRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
@@ -84,7 +85,7 @@ export function testFilesRouter(db: Db, config: Config): Router {
   return router;
 }
 
-export function generateRouter(db: Db, config: Config): Router {
+export function generateRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.post("/requirements/:id/generate", (req, res) => {

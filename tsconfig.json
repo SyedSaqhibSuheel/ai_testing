@@ -15,6 +15,6 @@
     "declaration": false,
     "sourceMap": false
   },
-  "include": ["src", "server"],
+  "include": ["src", "server", "server/types"],
   "exclude": ["web", "node_modules", "dist"]
 }

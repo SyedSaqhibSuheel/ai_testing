@@ -176,6 +176,58 @@ export const gitCommitFiles = sqliteTable("git_commit_files", {
 });
 
 // ---------------------------------------------------------------------------
+// Test execution - runs the committed Playwright test for real (no AI - just
+// `npx playwright test`) and stores the report so the dashboard can show
+// pass/fail/duration/errors/screenshots/traces/history without needing
+// GitHub Actions polling. Complements (doesn't replace) the real
+// .github/workflows/playwright.yml committed into the managed repo.
+// ---------------------------------------------------------------------------
+
+export type TestRunStatus = "running" | "passed" | "failed" | "error";
+export type TestRunTrigger = "manual" | "auto_after_commit";
+
+export const testRuns = sqliteTable("test_runs", {
+  id: id(),
+  testFileId: text("test_file_id").notNull().references(() => testFiles.id),
+  triggeredBy: text("triggered_by").$type<TestRunTrigger>().notNull(),
+  status: text("status").$type<TestRunStatus>().notNull().default("running"),
+  startedAt: timestamp("started_at").notNull().$defaultFn(() => new Date()),
+  finishedAt: timestamp("finished_at"),
+  durationMs: integer("duration_ms"),
+  totalTests: integer("total_tests"),
+  passedCount: integer("passed_count"),
+  failedCount: integer("failed_count"),
+  skippedCount: integer("skipped_count"),
+  artifactsDir: text("artifacts_dir"),
+  errorMessage: text("error_message"),
+});
+
+export const testRunCases = sqliteTable("test_run_cases", {
+  id: id(),
+  testRunId: text("test_run_id").notNull().references(() => testRuns.id),
+  suiteTitle: text("suite_title"),
+  title: text("title").notNull(),
+  status: text("status").$type<"passed" | "failed" | "timedOut" | "skipped" | "interrupted">().notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  errorMessage: text("error_message"),
+  errorStack: text("error_stack"),
+  screenshotPath: text("screenshot_path"),
+  tracePath: text("trace_path"),
+  stdout: json<string[]>("stdout").notNull().default([]),
+  stderr: json<string[]>("stderr").notNull().default([]),
+  // Set only for failed/timedOut cases, by server/analysis/classifyTestFailure.ts
+  // right after the run - null means "passed" or "not yet classified".
+  classification: text("classification").$type<
+    "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE"
+  >(),
+  classificationConfidence: real("classification_confidence"),
+  classificationEvidenceKind: text("classification_evidence_kind"),
+  classificationEvidence: json<string[]>("classification_evidence"),
+  classificationReasoning: text("classification_reasoning"),
+  suggestedFix: text("suggested_fix"),
+});
+
+// ---------------------------------------------------------------------------
 // Agent activity - generic log powering both live status and history
 // ---------------------------------------------------------------------------
 
