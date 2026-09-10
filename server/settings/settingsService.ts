@@ -51,8 +51,6 @@ export interface MaskedSettings extends PlatformSettings {
     openaiApiKey: boolean;
     geminiApiKey: boolean;
   };
-  appBaseUrl: string;
-  apiBaseUrl: string;
 }
 
 export function getMaskedSettings(db: Db, config: Config): MaskedSettings {
@@ -63,8 +61,6 @@ export function getMaskedSettings(db: Db, config: Config): MaskedSettings {
       openaiApiKey: !!config.openaiApiKey,
       geminiApiKey: !!config.geminiApiKey,
     },
-    appBaseUrl: config.appBaseUrl,
-    apiBaseUrl: config.apiBaseUrl,
   };
 }
 

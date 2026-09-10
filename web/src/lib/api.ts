@@ -93,6 +93,7 @@ export const api = {
   // Settings
   getSettings: () => request<MaskedSettings>("/settings"),
   updateSettings: (patch: Partial<MaskedSettings>) => request<MaskedSettings>("/settings", { method: "PATCH", body: JSON.stringify(patch) }),
+  verifyGeminiKey: () => request<{ success: boolean; message: string }>("/settings/verify-gemini", { method: "POST" }),
 
   // Dashboard
   getDashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),

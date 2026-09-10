@@ -156,8 +156,6 @@ export interface MaskedSettings {
   managedRepoDir: string;
   managedRepoBranch: string;
   secretsPresent: { anthropicApiKey: boolean; openaiApiKey: boolean; geminiApiKey: boolean };
-  appBaseUrl: string;
-  apiBaseUrl: string;
 }
 
 export interface GitCommitRecord {
