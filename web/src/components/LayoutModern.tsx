@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { ModeToggle } from "@/components/theme/ModeToggle";
 import {
   LayoutDashboard,
   FileText,
@@ -29,23 +30,24 @@ export function LayoutModern() {
   });
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-50">
+    <div className="flex h-screen bg-bg text-text">
       {/* Sidebar */}
-      <aside className="w-72 border-r border-slate-700/50 flex flex-col shrink-0 bg-slate-900/50 backdrop-blur-xl">
+      <aside className="w-72 border-r border-border flex flex-col shrink-0 bg-panel backdrop-blur-xl">
         {/* Header */}
-        <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-700/30">
+        <div className="h-16 flex items-center gap-3 px-6 border-b border-border">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-lg">
             <Zap className="w-5 h-5 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-sm font-bold text-slate-50">AI Testing</h1>
-            <p className="text-xs text-slate-400">Platform</p>
+            <h1 className="text-sm font-bold text-text">AI Testing</h1>
+            <p className="text-xs text-muted">Platform</p>
           </div>
+          <ModeToggle />
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
-          <p className="text-xs font-semibold uppercase text-slate-500 px-2 mb-3 tracking-wider">
+          <p className="text-xs font-semibold uppercase text-muted-2 px-2 mb-3 tracking-wider">
             Main
           </p>
           {NAV_ITEMS.map((item) => (
@@ -59,8 +61,8 @@ export function LayoutModern() {
                   transition-all duration-200 group
                   ${
                     isActive
-                      ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-lg shadow-indigo-500/10"
-                      : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+                      ? "bg-accent/15 text-accent border border-accent/30 shadow-lg shadow-accent/10"
+                      : "text-muted hover:text-text hover:bg-panel-2"
                   }
                 `
               }
@@ -75,15 +77,15 @@ export function LayoutModern() {
         </nav>
 
         {/* Footer Status */}
-        <div className="p-4 border-t border-slate-700/30 space-y-3">
-          <div className="bg-slate-800/50 backdrop-blur rounded-lg p-3 space-y-2">
+        <div className="p-4 border-t border-border space-y-3">
+          <div className="bg-panel-2 backdrop-blur rounded-lg p-3 space-y-2">
             <div className="flex items-center gap-2 text-xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-slate-300 font-medium">
+              <span className="text-text font-medium">
                 {settings?.llmProvider ?? "Loading"}
               </span>
             </div>
-            <div className="text-xs text-slate-400 capitalize">
+            <div className="text-xs text-muted capitalize">
               {settings?.approvalMode?.replace(/_/g, " ") ?? "Loading"} approval
             </div>
           </div>
@@ -91,7 +93,7 @@ export function LayoutModern() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
+      <main className="flex-1 overflow-y-auto bg-bg">
         <Outlet />
       </main>
     </div>

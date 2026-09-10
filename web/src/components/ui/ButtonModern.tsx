@@ -7,10 +7,10 @@ const variantClasses: Record<Variant, string> = {
   primary:
     "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg hover:shadow-xl active:scale-95",
   secondary:
-    "bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-600 hover:border-slate-500",
+    "bg-panel-2 hover:bg-panel text-text border border-border hover:border-border-hover",
   danger:
     "bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/50 hover:border-rose-500",
-  ghost: "hover:bg-slate-800/50 text-slate-300 hover:text-slate-100",
+  ghost: "hover:bg-panel-2 text-muted hover:text-text",
   success:
     "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-xl active:scale-95",
   outline:
