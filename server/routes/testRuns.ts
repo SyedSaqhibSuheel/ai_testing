@@ -4,8 +4,9 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { testFiles, testRuns, testRunCases } from "../db/schema.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
+import type { URLConfigService } from "../config/urlConfigService.js";
 
-export function testRunsRouter(db: Db, config: Config): Router {
+export function testRunsRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
@@ -31,7 +32,7 @@ export function testRunsRouter(db: Db, config: Config): Router {
 }
 
 /** Mounted at /api/test-files so the route reads naturally as "run this test file". */
-export function runTestRouter(db: Db, config: Config): Router {
+export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.post("/:id/run", (req, res) => {
@@ -40,9 +41,11 @@ export function runTestRouter(db: Db, config: Config): Router {
       res.status(404).json({ error: "Test file not found" });
       return;
     }
+    // Get active URL configuration for test execution
+    const activeUrlConfig = urlConfigService ? urlConfigService.getActiveConfig() : { appBaseUrl: config.appBaseUrl };
     // Fire-and-forget, matching every other agent trigger in this app - the
     // client polls GET /api/test-runs?testFileId=... for the new run.
-    runPlaywrightTest(db, config, req.params.id, "manual").catch((err) => {
+    runPlaywrightTest(db, config, req.params.id, "manual", activeUrlConfig.appBaseUrl).catch((err) => {
       console.error(`Manual test run failed for test file ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "running" });

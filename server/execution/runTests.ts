@@ -69,7 +69,8 @@ export async function runPlaywrightTest(
   db: Db,
   config: Config,
   testFileId: string,
-  triggeredBy: "manual" | "auto_after_commit"
+  triggeredBy: "manual" | "auto_after_commit",
+  appBaseUrl?: string
 ): Promise<string> {
   const file = db.select().from(testFiles).where(eq(testFiles.id, testFileId)).get();
   if (!file) throw new Error(`Test file ${testFileId} not found`);
@@ -103,11 +104,14 @@ export async function runPlaywrightTest(
     }
 
     await new Promise<void>((resolve, reject) => {
+      // Per-run target URL: an explicit appBaseUrl (from the active URL
+      // config) wins, otherwise fall back to the configured default.
+      const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
       const child = spawn(playwrightBin, ["test", file.filePath, `--output=${artifactsDir}`], {
         cwd: config.managedRepoDir,
         env: {
           ...process.env,
-          PLAYWRIGHT_BASE_URL: config.appBaseUrl,
+          PLAYWRIGHT_BASE_URL: targetAppUrl,
           PLAYWRIGHT_JSON_OUTPUT_NAME: jsonReportPath,
         },
       });

@@ -4,8 +4,9 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { requirements } from "../db/schema.js";
 import { runPlannerAgent, getLatestExplorationRun } from "../agents/plannerAgent.js";
+import type { URLConfigService } from "../config/urlConfigService.js";
 
-export function planRouter(db: Db, config: Config): Router {
+export function planRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.post("/requirements/:id/plan", (req, res) => {
@@ -14,7 +15,11 @@ export function planRouter(db: Db, config: Config): Router {
       res.status(404).json({ error: "Requirement not found" });
       return;
     }
-    runPlannerAgent(db, config, req.params.id).catch((err) => {
+
+    // Get active URL configuration for test execution
+    const activeUrlConfig = urlConfigService ? urlConfigService.getActiveConfig() : { appBaseUrl: config.appBaseUrl, apiBaseUrl: config.apiBaseUrl };
+
+    runPlannerAgent(db, config, req.params.id, activeUrlConfig.appBaseUrl).catch((err) => {
       console.error(`Planner agent failed for requirement ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "planning" });

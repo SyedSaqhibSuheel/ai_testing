@@ -23,11 +23,10 @@ export function attachSseHub(db: Db, app: { get: (path: string, handler: (req: R
   });
 
   app.get("/api/agent-runs/stream", (req, res) => {
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    });
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.writeHead(200);
     res.write(": connected\n\n");
     clients.add(res);
 

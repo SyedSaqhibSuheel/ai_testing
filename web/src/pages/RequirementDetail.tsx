@@ -297,11 +297,11 @@ function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boole
                 <span className="flex items-center gap-3 text-muted">
                   {r.totalTests != null && (
                     <span className="mono">
-                      <span className="text-pass">{r.passedCount}</span>/{r.totalTests} passed
+                      <span className="text-pass">{r.passedCount ?? 0}</span>/{r.totalTests} passed
                     </span>
                   )}
                   <span className="mono">{formatDuration(r.durationMs)}</span>
-                  <span>{new Date(r.startedAt).toLocaleString()}</span>
+                  <span>{r.startedAt ? new Date(r.startedAt).toLocaleString() : "-"}</span>
                 </span>
               </button>
               {expandedRunId === r.id && (
@@ -330,6 +330,7 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
   const [commitOpen, setCommitOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState(`Add generated tests for: ${file.filePath}`);
+  const [commitError, setCommitError] = useState<string | null>(null);
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["requirement", requirementId] });
     queryClient.invalidateQueries({ queryKey: ["test-files"] });
@@ -348,7 +349,15 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
     mutationFn: () => api.commitTestFiles([file.id], message),
     onSuccess: () => {
       setCommitOpen(false);
+      setCommitError(null);
+      setMessage(`Add generated tests for: ${file.filePath}`);
+      setReason("");
       invalidate();
+    },
+    onError: (error) => {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setCommitError(errorMsg);
+      console.error("Commit failed:", errorMsg);
     },
   });
 
@@ -400,14 +409,26 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
         </div>
       </Modal>
 
-      <Modal open={commitOpen} onClose={() => setCommitOpen(false)} title="Commit to Git">
+      <Modal
+        open={commitOpen}
+        onClose={() => {
+          setCommitOpen(false);
+          setCommitError(null);
+        }}
+        title="Commit to Git"
+      >
         <input
           className="w-full bg-panel-2 border border-border rounded-md px-3 py-2 text-sm mb-3"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          placeholder="Enter commit message"
         />
+        {commitError && <div className="text-xs text-fail mb-3 p-2 bg-fail/10 rounded">{commitError}</div>}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setCommitOpen(false)}>
+          <Button variant="secondary" onClick={() => {
+            setCommitOpen(false);
+            setCommitError(null);
+          }}>
             Cancel
           </Button>
           <Button onClick={() => commit.mutate()} disabled={!message.trim() || commit.isPending}>

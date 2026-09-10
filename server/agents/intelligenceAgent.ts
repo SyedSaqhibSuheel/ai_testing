@@ -135,7 +135,7 @@ export async function runIntelligenceAgent(db: Db, config: Config, requirementId
  * the old row (kept for audit history, never hard-deleted) and inserts a new
  * `ai_proposed` scenario in its place, on the same requirement/analysis.
  */
-export async function regenerateScenario(db: Db, config: Config, scenarioId: string, actor: string, feedback?: string): Promise<string> {
+export async function regenerateScenario(db: Db, config: Config, scenarioId: string, actor: string, feedback?: string, urlConfigService?: any): Promise<string> {
   const scenario = db.select().from(scenarios).where(eq(scenarios.id, scenarioId)).get();
   if (!scenario) throw new Error(`Scenario ${scenarioId} not found`);
   const requirement = db.select().from(requirements).where(eq(requirements.id, scenario.requirementId)).get();

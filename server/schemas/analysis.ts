@@ -9,7 +9,8 @@ export const DraftScenarioSchema = z.object({
   preconditions: z.array(z.string()).default([]),
   draftSteps: z.array(z.string()).min(1),
   expectedResult: z.string().min(1),
-  aiConfidence: z.number().min(0).max(1),
+  // Normalize confidence values: if > 1, divide by 100 (e.g., 80 → 0.8)
+  aiConfidence: z.number().min(0).transform(val => val > 1 ? val / 100 : val).pipe(z.number().max(1)),
 });
 export type DraftScenario = z.infer<typeof DraftScenarioSchema>;
 
