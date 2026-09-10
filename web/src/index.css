@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Class-based dark mode: ThemeProvider toggles `.light` / `.dark` on <html>.
+   Dark is the default look; `.light` overrides the palette below. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-bg: #0a0b0f;
   --color-panel: #12141a;
@@ -15,6 +19,24 @@
   --color-fail: #f4485e;
   --color-warn: #f0a83c;
 }
+
+/* Light palette - applied when <html> has the `.light` class. Accent/status
+   colours are shared; only the neutrals flip. */
+html.light {
+  --color-bg: #f6f7f9;
+  --color-panel: #ffffff;
+  --color-panel-2: #eef0f3;
+  --color-border: #e2e5ea;
+  --color-border-hover: #cbd0d9;
+  --color-text: #1a1c22;
+  --color-muted: #5f6472;
+  --color-muted-2: #8b91a0;
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+}
+
+html.light { color-scheme: light; }
+html.dark { color-scheme: dark; }
 
 body {
   background: var(--color-bg);

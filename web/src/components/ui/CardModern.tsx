@@ -6,12 +6,12 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 const variantClasses: Record<string, string> = {
-  default: "bg-slate-800 border border-slate-700 hover:border-slate-600",
+  default: "bg-panel border border-border hover:border-border-hover",
   glass:
-    "bg-slate-800/50 backdrop-blur-xl border border-slate-700/50 hover:border-slate-600/50 hover:bg-slate-800/60",
+    "bg-panel/70 backdrop-blur-xl border border-border hover:border-border-hover hover:bg-panel-2",
   elevated:
-    "bg-slate-800 border border-slate-700 shadow-xl hover:shadow-2xl hover:border-slate-600",
-  ghost: "border border-slate-700/50 hover:border-slate-600 hover:bg-slate-800/30",
+    "bg-panel border border-border shadow-xl hover:shadow-2xl hover:border-border-hover",
+  ghost: "border border-border hover:border-border-hover hover:bg-panel-2",
 };
 
 export function CardModern({

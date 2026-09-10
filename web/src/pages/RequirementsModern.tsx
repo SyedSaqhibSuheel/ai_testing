@@ -10,9 +10,9 @@ import { BadgeModern } from "@/components/ui/BadgeModern";
 
 function PageHeaderModern({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="bg-gradient-to-b from-slate-900 to-slate-800/50 border-b border-slate-700/30 px-8 py-8">
-      <h1 className="text-3xl font-bold text-slate-50 mb-2">{title}</h1>
-      <p className="text-slate-400">{subtitle}</p>
+    <div className="bg-panel border-b border-border px-8 py-8">
+      <h1 className="text-3xl font-bold text-text mb-2">{title}</h1>
+      <p className="text-muted">{subtitle}</p>
     </div>
   );
 }
@@ -76,7 +76,7 @@ export function RequirementsModern() {
         {/* New Requirement Section */}
         <CardModern variant="glass" className="p-8">
           <div className="mb-4">
-            <label className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+            <label className="text-sm font-semibold text-muted uppercase tracking-wider">
               Create New Requirement
             </label>
           </div>
@@ -86,7 +86,7 @@ export function RequirementsModern() {
               value={newRequirementText}
               onChange={(e) => setNewRequirementText(e.target.value)}
               placeholder='e.g., "An administrator should be able to create a customer. Name and email are mandatory. Duplicate emails must be rejected. Normal users must not be allowed to create customers."'
-              className="w-full px-4 py-3 rounded-lg bg-slate-800/50 border border-slate-600/50 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-slate-100 placeholder-slate-500 resize-none outline-none transition-all duration-200"
+              className="w-full px-4 py-3 rounded-lg bg-panel-2 border border-border focus:border-accent focus:ring-2 focus:ring-accent/20 text-text placeholder-muted-2 resize-none outline-none transition-all duration-200"
               rows={4}
             />
 
@@ -122,10 +122,10 @@ export function RequirementsModern() {
         {/* Requirements List */}
         <div>
           <div className="mb-6">
-            <h2 className="text-lg font-bold text-slate-50 mb-2">
+            <h2 className="text-lg font-bold text-text mb-2">
               All Requirements ({requirements.length})
             </h2>
-            <p className="text-slate-400 text-sm">
+            <p className="text-muted text-sm">
               Click on any requirement to view details and scenarios
             </p>
           </div>
@@ -139,15 +139,15 @@ export function RequirementsModern() {
                     <CardModern
                       variant="glass"
                       interactive
-                      className="p-6 group hover:shadow-xl hover:shadow-indigo-500/10"
+                      className="p-6 group hover:shadow-xl hover:shadow-accent/10"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
-                          <p className="text-slate-100 font-semibold mb-3 line-clamp-2 group-hover:text-indigo-300 transition-colors">
+                          <p className="text-text font-semibold mb-3 line-clamp-2 group-hover:text-accent transition-colors">
                             {req.title || req.rawText}
                           </p>
 
-                          <div className="flex flex-wrap items-center gap-4 text-sm text-slate-400">
+                          <div className="flex flex-wrap items-center gap-4 text-sm text-muted">
                             <div className="flex items-center gap-1.5">
                               <User className="w-4 h-4" />
                               <span>{req.submittedBy || "Unknown"}</span>
@@ -167,7 +167,7 @@ export function RequirementsModern() {
                           >
                             {statusConfig.label}
                           </BadgeModern>
-                          <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-indigo-400 transition-colors" />
+                          <ArrowRight className="w-5 h-5 text-muted-2 group-hover:text-accent transition-colors" />
                         </div>
                       </div>
                     </CardModern>
@@ -176,8 +176,8 @@ export function RequirementsModern() {
               })
             ) : (
               <CardModern variant="ghost" className="p-12 text-center">
-                <p className="text-slate-400 mb-4">No requirements yet</p>
-                <p className="text-slate-500 text-sm">
+                <p className="text-muted mb-4">No requirements yet</p>
+                <p className="text-text0 text-sm">
                   Create your first requirement above to get started
                 </p>
               </CardModern>
