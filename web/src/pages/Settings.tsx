@@ -4,7 +4,6 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/PageHeader";
-import { URLConfigPanel } from "@/components/URLConfigPanel";
 import type { ApprovalMode } from "@/lib/types";
 
 const MODES: { value: ApprovalMode; label: string; description: string }[] = [
@@ -21,7 +20,6 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
   const [actorEmail, setActorEmail] = useState(() => localStorage.getItem("actorEmail") ?? "");
-  const [geminiStatus, setGeminiStatus] = useState<{ verified?: boolean; message?: string; error?: string } | null>(null);
 
   useEffect(() => {
     localStorage.setItem("actorEmail", actorEmail);
@@ -30,23 +28,6 @@ export function SettingsPage() {
   const updateMode = useMutation({
     mutationFn: (approvalMode: ApprovalMode) => api.updateSettings({ approvalMode }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
-  });
-
-  const verifyGemini = useMutation({
-    mutationFn: async () => {
-      const response = await fetch("/api/settings/verify-gemini", { method: "POST" });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Verification failed");
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      setGeminiStatus({ verified: data.success, message: data.message });
-    },
-    onError: (error) => {
-      setGeminiStatus({ error: error instanceof Error ? error.message : "Verification failed" });
-    },
   });
 
   if (!settings) return <div className="p-8 text-sm text-muted">Loading...</div>;
@@ -112,29 +93,12 @@ export function SettingsPage() {
                 {settings.secretsPresent.openaiApiKey ? "Configured" : "Not set"}
               </span>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between">
               <span className="text-muted">Gemini key</span>
-              <div className="flex items-center gap-2">
-                <span className={settings.secretsPresent.geminiApiKey ? "text-pass" : "text-muted"}>
-                  {settings.secretsPresent.geminiApiKey ? "Configured" : "Not set"}
-                </span>
-                {settings.secretsPresent.geminiApiKey && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => verifyGemini.mutate()}
-                    disabled={verifyGemini.isPending}
-                    className="text-xs py-1 px-2"
-                  >
-                    {verifyGemini.isPending ? "Verifying..." : "Verify"}
-                  </Button>
-                )}
-              </div>
+              <span className={settings.secretsPresent.geminiApiKey ? "text-pass" : "text-muted"}>
+                {settings.secretsPresent.geminiApiKey ? "Configured" : "Not set"}
+              </span>
             </div>
-            {geminiStatus && (
-              <div className={`text-xs p-2 rounded ${geminiStatus.verified ? "bg-pass/10 text-pass" : "bg-fail/10 text-fail"}`}>
-                {geminiStatus.message || geminiStatus.error}
-              </div>
-            )}
           </Card>
         </div>
 
@@ -167,8 +131,17 @@ export function SettingsPage() {
         </div>
 
         <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Environment configuration</h2>
-          <URLConfigPanel />
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Application under test</h2>
+          <Card className="p-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted">App URL</span>
+              <span className="mono text-xs">{settings.appBaseUrl}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted">API URL</span>
+              <span className="mono text-xs">{settings.apiBaseUrl}</span>
+            </div>
+          </Card>
         </div>
       </div>
     </div>

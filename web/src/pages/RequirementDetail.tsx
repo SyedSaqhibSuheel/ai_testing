@@ -12,7 +12,7 @@ import type { Scenario, TestFile, TestRunCase } from "@/lib/types";
 function Section({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h2>
         {actions}
       </div>
@@ -54,7 +54,7 @@ function ScenarioCard({ scenario, requirementId }: { scenario: Scenario; require
 
   return (
     <Card className="p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="text-sm font-medium">{scenario.title}</div>
           <div className="text-xs text-muted mt-1">{scenario.description}</div>
@@ -297,11 +297,11 @@ function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boole
                 <span className="flex items-center gap-3 text-muted">
                   {r.totalTests != null && (
                     <span className="mono">
-                      <span className="text-pass">{r.passedCount ?? 0}</span>/{r.totalTests} passed
+                      <span className="text-pass">{r.passedCount}</span>/{r.totalTests} passed
                     </span>
                   )}
                   <span className="mono">{formatDuration(r.durationMs)}</span>
-                  <span>{r.startedAt ? new Date(r.startedAt).toLocaleString() : "-"}</span>
+                  <span>{new Date(r.startedAt).toLocaleString()}</span>
                 </span>
               </button>
               {expandedRunId === r.id && (
@@ -330,7 +330,6 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
   const [commitOpen, setCommitOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState(`Add generated tests for: ${file.filePath}`);
-  const [commitError, setCommitError] = useState<string | null>(null);
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["requirement", requirementId] });
     queryClient.invalidateQueries({ queryKey: ["test-files"] });
@@ -349,15 +348,7 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
     mutationFn: () => api.commitTestFiles([file.id], message),
     onSuccess: () => {
       setCommitOpen(false);
-      setCommitError(null);
-      setMessage(`Add generated tests for: ${file.filePath}`);
-      setReason("");
       invalidate();
-    },
-    onError: (error) => {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      setCommitError(errorMsg);
-      console.error("Commit failed:", errorMsg);
     },
   });
 
@@ -409,26 +400,14 @@ function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: 
         </div>
       </Modal>
 
-      <Modal
-        open={commitOpen}
-        onClose={() => {
-          setCommitOpen(false);
-          setCommitError(null);
-        }}
-        title="Commit to Git"
-      >
+      <Modal open={commitOpen} onClose={() => setCommitOpen(false)} title="Commit to Git">
         <input
           className="w-full bg-panel-2 border border-border rounded-md px-3 py-2 text-sm mb-3"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Enter commit message"
         />
-        {commitError && <div className="text-xs text-fail mb-3 p-2 bg-fail/10 rounded">{commitError}</div>}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => {
-            setCommitOpen(false);
-            setCommitError(null);
-          }}>
+          <Button variant="secondary" onClick={() => setCommitOpen(false)}>
             Cancel
           </Button>
           <Button onClick={() => commit.mutate()} disabled={!message.trim() || commit.isPending}>
@@ -478,10 +457,12 @@ export function RequirementDetail() {
         subtitle={`Submitted by ${requirement.submittedBy} on ${new Date(requirement.createdAt).toLocaleString()}`}
         actions={<StatusBadge status={requirement.status} />}
       />
-      <div className="p-8 space-y-8 max-w-4xl">
-        <Card className="p-4">
-          <div className="text-sm">{requirement.rawText}</div>
-        </Card>
+      <div className="w-full max-w-6xl space-y-6 p-4 sm:space-y-8 sm:p-6 md:p-8">
+        <Card className="p-4 sm:p-5">
+  <div className="break-words text-sm leading-6">
+    {requirement.rawText}
+  </div>
+</Card>
 
         {/* AI Testing Intelligence Layer */}
         <Section

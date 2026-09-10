@@ -35,7 +35,7 @@ function Row({ scenario }: { scenario: Scenario }) {
   const canApprove = scenario.status === "ai_proposed" || scenario.status === "grounded_pending_review";
 
   return (
-    <div className="p-4 flex items-start justify-between gap-4">
+  <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <Link to={`/requirements/${scenario.requirementId}`} className="text-sm font-medium hover:text-accent">
           {scenario.title}
@@ -45,7 +45,7 @@ function Row({ scenario }: { scenario: Scenario }) {
           {scenario.aiConfidence != null && ` · ${Math.round(scenario.aiConfidence * 100)}% confidence`}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+     <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
         <StatusBadge status={scenario.status} />
         {canApprove && (
           <Button variant="secondary" onClick={() => approve.mutate()} disabled={approve.isPending}>
