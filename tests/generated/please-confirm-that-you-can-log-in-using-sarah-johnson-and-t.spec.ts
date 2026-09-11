@@ -1,23 +1,21 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Please confirm that you can log in using Sarah Johnson and the password 1234', () => {
-  test('Successful login with valid credentials', async ({ page }) => {
-    // Navigate to the login page
+test.describe('Please confirm that you can log in using Sarah Johnson and the password 12345', () => {
+  test('Successful Login with Valid Credentials', async ({ page }) => {
+    // Navigate to login screen
     await page.goto('/login');
 
-    // Enter username using exact login locator
+    // Enter username
     await page.getByLabel('Agent Name').fill('Sarah Johnson');
 
-    // Enter password using exact login locator (using 1234 as per test specification)
-    await page.getByLabel('Password').fill('1234');
+    // Enter password
+    await page.getByLabel('Password').fill('12345');
 
-    // Submit the login form using exact login locator
+    // Submit the login form
     await page.getByRole('button', { name: 'Sign in' }).click();
 
-    // Verify successful redirection to the helpdesk dashboard at route /
+    // Verify user is successfully authenticated and redirected to the main application dashboard
     await expect(page).toHaveURL('/');
-    
-    // Verify dashboard element is visible to ensure successful authentication
     await expect(page.getByTestId('text-active-requests-title')).toBeVisible();
   });
 });
