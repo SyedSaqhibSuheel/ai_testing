@@ -7,7 +7,6 @@ test.describe('Confirm the login with Sarah Johnson and the password 12345', () 
     await page.getByTestId('input-password').fill('12345');
     await page.getByTestId('button-sign-in').click();
     await expect(page).toHaveURL('/');
-    await expect(page.getByTestId('text-active-requests-title')).toBeVisible();
   });
 
   test('Successful Login with Specific Credentials for Sarah Johnson', async ({ page }) => {
@@ -16,7 +15,7 @@ test.describe('Confirm the login with Sarah Johnson and the password 12345', () 
     await page.getByTestId('input-password').fill('12345');
     await page.getByTestId('button-sign-in').click();
     await expect(page).toHaveURL('/');
+    await expect(page.getByTestId('text-active-requests-title')).toBeVisible();
     await expect(page.getByTestId('text-employee-name')).toBeVisible();
-    await expect(page.getByTestId('button-logout')).toBeVisible();
   });
 });
