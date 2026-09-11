@@ -11,7 +11,7 @@ export function buildGeneratorSystemPrompt(): string {
     "- One `test(<title>, async ({ page }) => { ... })` per scenario, in the same order given.",
     "- Use `await page.goto(<route>)` for navigation, `page.getByTestId('<exact id>')` for every element interaction/assertion - ONLY use testids from the CONFIRMED LOCATORS list given below, verbatim. Never invent a testid or use a CSS/text selector as a substitute.",
     "- Use real `expect(...)` assertions derived from each scenario's expectedUiOutcomes/passCriteria - e.g. `await expect(page.getByTestId('...')).toBeVisible()`, `.toHaveText(...)`, etc.",
-    "- If login is required (credentials are given below), write a small beforeEach or inline login flow reused across tests.",
+    "- If login is required (credentials are given below), write a small beforeEach or inline login flow reused across tests. If LOGIN LOCATORS are given below, they are the ONLY correct way to interact with the login form (it has no data-testids) - copy those exact Playwright expressions verbatim for the username field, password field, and submit action, in that order. Do not use getByTestId for the login form in that case, and do not invent alternative locators for it.",
     "- The file must be valid, self-contained TypeScript with no placeholder/TODO code - every test must be a real, runnable Playwright test even if you have to make a reasonable, clearly-commented assumption for a gap in the plan.",
     "",
     "Output ONLY a single JSON object matching this shape (no markdown fences, no commentary):",
@@ -31,8 +31,26 @@ export function buildGeneratorUserPrompt(
   scenarios: Scenario[],
   confirmedTestIds: string[],
   confirmedRoutes: string[],
-  login?: { username: string; password: string }
+  login?: { username: string; password: string; usernameLocator?: string; passwordLocator?: string; submitLocator?: string }
 ): string {
+  const loginSection = !login
+    ? "## Login\nNo login credentials configured - assume the app doesn't require auth for these flows."
+    : [
+        "## Login",
+        `Username field value: "${login.username}"`,
+        `Password field value: "${login.password}"`,
+        login.usernameLocator && login.passwordLocator && login.submitLocator
+          ? [
+              "## LOGIN LOCATORS (verbatim - the login form has no data-testids, do not use getByTestId for it)",
+              `Username field: ${login.usernameLocator}`,
+              `Password field: ${login.passwordLocator}`,
+              `Submit action: ${login.submitLocator}`,
+            ].join("\n")
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
   return [
     `REQUIREMENT TITLE: ${requirementTitle}`,
     "",
@@ -45,6 +63,6 @@ export function buildGeneratorUserPrompt(
     "## CONFIRMED ROUTES",
     confirmedRoutes.map((r) => `- ${r}`).join("\n") || "(none - use '/' if unsure)",
     "",
-    login ? `## Login\nUsername field value: "${login.username}"\nPassword field value: "${login.password}"` : "## Login\nNo login credentials configured - assume the app doesn't require auth for these flows.",
+    loginSection,
   ].join("\n");
 }
