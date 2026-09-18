@@ -1,21 +1,59 @@
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { testFiles, testRuns, testRunCases } from "../db/schema.js";
+import {
+  testFiles,
+  testRuns,
+  testRunCases,
+  testFileScenarios,
+  scenarios,
+} from "../db/schema.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
 
 export function testRunsRouter(db: Db, config: Config): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { testFileId } = req.query;
-    const rows =
-      typeof testFileId === "string"
-        ? db.select().from(testRuns).where(eq(testRuns.testFileId, testFileId)).orderBy(desc(testRuns.startedAt)).all()
-        : db.select().from(testRuns).orderBy(desc(testRuns.startedAt)).limit(100).all();
-    res.json(rows);
-  });
+  const { testFileId, applicationId } = req.query;
+
+  let rows =
+    typeof testFileId === "string"
+      ? db
+          .select()
+          .from(testRuns)
+          .where(eq(testRuns.testFileId, testFileId))
+          .orderBy(desc(testRuns.startedAt))
+          .all()
+      : db
+          .select()
+          .from(testRuns)
+          .orderBy(desc(testRuns.startedAt))
+          .limit(100)
+          .all();
+
+  if (typeof applicationId === "string") {
+    const matchingTestFiles = db
+      .select({ testFileId: testFileScenarios.testFileId })
+      .from(testFileScenarios)
+      .innerJoin(
+        scenarios,
+        eq(testFileScenarios.scenarioId, scenarios.id),
+      )
+      .where(eq(scenarios.applicationId, applicationId))
+      .all();
+
+    const matchingTestFileIds = matchingTestFiles.map(
+      (row) => row.testFileId,
+    );
+
+    rows = rows.filter((run) =>
+      matchingTestFileIds.includes(run.testFileId),
+    );
+  }
+
+  res.json(rows);
+});
 
   router.get("/:id", (req, res) => {
     const run = db.select().from(testRuns).where(eq(testRuns.id, req.params.id)).get();

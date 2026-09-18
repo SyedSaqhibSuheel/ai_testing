@@ -6,6 +6,18 @@ const timestamp = (name: string) => integer(name, { mode: "timestamp" });
 const json = <T = unknown>(name: string) => text(name, { mode: "json" }).$type<T>();
 
 // ---------------------------------------------------------------------------
+// Applications
+// ---------------------------------------------------------------------------
+
+export const applications = sqliteTable("applications", {
+  id: id(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ---------------------------------------------------------------------------
 // Requirements
 // ---------------------------------------------------------------------------
 
@@ -72,7 +84,14 @@ export type ScenarioStatus =
 
 export const scenarios = sqliteTable("scenarios", {
   id: id(),
-  requirementId: text("requirement_id").notNull().references(() => requirements.id),
+
+  requirementId: text("requirement_id")
+    .notNull()
+    .references(() => requirements.id, { onDelete: "cascade" }),
+
+  applicationId: text("application_id")
+    .references(() => applications.id, { onDelete: "set null" }),
+
   analysisId: text("analysis_id"),
   sourceType: text("source_type").$type<"ai_generated" | "user_added">().notNull().default("ai_generated"),
   title: text("title").notNull(),

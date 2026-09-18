@@ -1,3 +1,5 @@
+import { ApplicationTestCases } from "@/pages/ApplicationTestCases";
+import { TestCaseManagement } from "@/pages/TestCaseManagement";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { useAgentRunStream } from "@/lib/useAgentRunStream";
@@ -20,6 +22,11 @@ export default function App() {
         <Route path="/requirements" element={<Requirements />} />
         <Route path="/requirements/:id" element={<RequirementDetail />} />
         <Route path="/scenarios" element={<Scenarios />} />
+        <Route path="/test-case-management" element={<TestCaseManagement />} />
+        <Route
+  path="/test-case-management/:id"
+  element={<ApplicationTestCases />}
+/>
         <Route path="/test-files" element={<TestFiles />} />
         <Route path="/git" element={<GitPage />} />
         <Route path="/agents" element={<AgentActivity />} />

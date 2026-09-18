@@ -10,9 +10,10 @@ export function scenariosRouter(db: Db, config: Config): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { requirementId, status } = req.query;
+    const { requirementId, applicationId, status } = req.query;
     const conditions = [eq(scenarios.isDeleted, false)];
     if (typeof requirementId === "string") conditions.push(eq(scenarios.requirementId, requirementId));
+    if (typeof applicationId === "string") conditions.push(eq(scenarios.applicationId, applicationId));
     if (typeof status === "string") conditions.push(eq(scenarios.status, status as never));
     const rows = db.select().from(scenarios).where(and(...conditions)).orderBy(desc(scenarios.createdAt)).all();
     res.json(rows);
@@ -29,7 +30,8 @@ export function scenariosRouter(db: Db, config: Config): Router {
       .insert(scenarios)
       .values({
         requirementId: b.requirementId,
-        sourceType: "user_added",
+applicationId: typeof b.applicationId === "string" ? b.applicationId : null, 
+sourceType: "user_added",
         title: b.title,
         description: b.description,
         priority: b.priority ?? "medium",

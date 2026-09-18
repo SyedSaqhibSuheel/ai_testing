@@ -1,0 +1,1 @@
+ALTER TABLE `scenarios` ADD COLUMN `application_id` text REFERENCES `applications`(`id`) ON DELETE set null;
