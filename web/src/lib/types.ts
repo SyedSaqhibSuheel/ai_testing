@@ -196,6 +196,14 @@ export interface TestRun {
   skippedCount: number | null;
   artifactsDir: string | null;
   errorMessage: string | null;
+
+  testCases?: {
+  testCaseId: string;
+  testTitle: string;
+  scenarioTitle: string;
+}[];
+
+
 }
 
 export type DefectClass = "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE";

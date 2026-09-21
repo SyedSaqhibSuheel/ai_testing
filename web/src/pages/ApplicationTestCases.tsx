@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/PageHeader";
@@ -7,6 +8,7 @@ import { api } from "@/lib/api";
 
 export function ApplicationTestCases() {
   const { id } = useParams<{ id: string }>();
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const { data: applications, isLoading: applicationsLoading } = useQuery({
     queryKey: ["applications"],
@@ -29,6 +31,15 @@ export function ApplicationTestCases() {
   queryKey: ["test-runs", "application", id],
   queryFn: () => api.listTestRuns({ applicationId: id! }),
   enabled: Boolean(id),
+});
+
+const {
+  data: selectedRunDetails,
+  isLoading: selectedRunLoading,
+} = useQuery({
+  queryKey: ["test-run", selectedRunId],
+  queryFn: () => api.getTestRun(selectedRunId!),
+  enabled: Boolean(selectedRunId),
 });
 
 const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
@@ -219,41 +230,211 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
 
                   <div className="divide-y divide-border">
                     {runs?.map((run) => (
-                      <div
-                        key={run.id}
-                        className="p-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <div className="font-medium">
-                            Execution
-                          </div>
+                     <div
+    
+  key={run.id}
+  onClick={() => setSelectedRunId(run.id)}
+  className="p-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-muted/10"
+>
+  <div>
+    <div className="font-medium">
+      {run.testCases?.[0]?.testTitle ?? "Execution"}
+    </div>
 
-                          <div className="text-xs text-muted mt-1">
-                            {new Date(run.startedAt).toLocaleTimeString(
-                              "en-IN",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </div>
+    {run.testCases?.[0] && (
+      <div className="text-xs text-muted mt-1">
+        Test Case ID: {run.testCases[0].testCaseId}
+      </div>
+    )}
 
-                          <div className="text-xs text-muted mt-1">
-                            Run ID: {run.id}
-                          </div>
-                        </div>
+    <div className="text-xs text-muted mt-1">
+      {new Date(run.startedAt).toLocaleTimeString(
+        "en-IN",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      )}
+    </div>
 
-                        <StatusBadge status={run.status} />
-                      </div>
-                    ))}
+    <div className="text-xs text-muted mt-1">
+      Run ID: {run.id}
+    </div>
+  </div>
+
+  <StatusBadge status={run.status} />
+</div>
+))}
                   </div>
                 </Card>
               ))}
             </div>
+                    )}
+
+        {selectedRunId && (
+          <Card className="overflow-hidden">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold">Execution Details</h2>
+                <p className="text-xs text-muted mt-1">
+                  Run ID: {selectedRunId}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRunId(null)}
+                className="text-sm text-muted hover:text-accent"
+              >
+                Close
+              </button>
+            </div>
+
+            {selectedRunLoading && (
+              <div className="p-5 text-sm text-muted">
+                Loading execution details...
+              </div>
+            )}
+
+            {!selectedRunLoading && selectedRunDetails && (
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-muted">Status</div>
+                    <div className="mt-1">
+                      <StatusBadge status={selectedRunDetails.run.status} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted">Started</div>
+                    <div className="text-sm mt-1">
+                      {new Date(
+                        selectedRunDetails.run.startedAt,
+                      ).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-muted">Finished</div>
+                    <div className="text-sm mt-1">
+                      {selectedRunDetails.run.finishedAt
+                        ? new Date(
+                            selectedRunDetails.run.finishedAt,
+                          ).toLocaleString("en-IN")
+                        : "Still running"}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-medium mb-3">Executed Test Cases</h3>
+
+                 {selectedRunDetails.cases.length === 0 &&
+selectedRunDetails.testCases.length === 0 ? (
+  <p className="text-sm text-muted">
+    No test cases are associated with this execution.
+  </p>
+) : (
+  <div className="divide-y divide-border border border-border rounded-lg">
+    {selectedRunDetails.cases.map((testCase) => (
+      <div key={testCase.id} className="p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="font-medium">
+              {testCase.title}
+            </div>
+
+            {testCase.suiteTitle && (
+              <div className="text-xs text-muted mt-1">
+                Suite: {testCase.suiteTitle}
+              </div>
+            )}
+
+            <div className="text-xs text-muted mt-1">
+              Test Case ID: {testCase.id}
+            </div>
+          </div>
+
+          <StatusBadge status={testCase.status} />
+        </div>
+
+        <div className="text-xs text-muted mt-2">
+          Duration: {testCase.durationMs} ms
+        </div>
+
+        {testCase.errorMessage && (
+          <div className="mt-3 rounded-md border border-red-500/30 p-3">
+            <div className="text-xs font-medium text-red-400">
+              Failure Details
+            </div>
+
+            <div className="text-sm mt-1">
+              {testCase.errorMessage}
+            </div>
+          </div>
+        )}
+
+        {testCase.classification && (
+          <div className="text-xs text-muted mt-2">
+            Classification: {testCase.classification}
+          </div>
+        )}
+
+        {testCase.suggestedFix && (
+          <div className="text-xs text-muted mt-2">
+            Suggested fix: {testCase.suggestedFix}
+          </div>
+        )}
+      </div>
+    ))}
+
+    {selectedRunDetails.cases.length === 0 &&
+      selectedRunDetails.testCases.map((testCase) => (
+        <div key={testCase.id} className="p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="font-medium">
+                {testCase.title}
+              </div>
+
+              <div className="text-xs text-muted mt-1">
+                Test Case ID: {testCase.testCaseId}
+              </div>
+
+              <div className="text-xs text-muted mt-1">
+                Scenario: {testCase.scenarioTitle}
+              </div>
+            </div>
+
+            <StatusBadge status={selectedRunDetails.run.status} />
+          </div>
+
+          {selectedRunDetails.run.errorMessage && (
+            <div className="mt-3 rounded-md border border-red-500/30 p-3">
+              <div className="text-xs font-medium text-red-400">
+                Execution Error
+              </div>
+
+              <div className="text-sm mt-1">
+                {selectedRunDetails.run.errorMessage}
+              </div>
+            </div>
           )}
 
-
-
+          <div className="text-xs text-muted mt-2">
+            This test case was associated with the execution, but Playwright
+            did not record an individual test result.
+          </div>
+        </div>
+      ))}
+  </div>
+)}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
       </div>
     </div>
   );

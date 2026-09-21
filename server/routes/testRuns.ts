@@ -52,18 +52,69 @@ export function testRunsRouter(db: Db, config: Config): Router {
     );
   }
 
-  res.json(rows);
+  const enrichedRows = rows.map((run) => {
+  const testCases = db
+    .select({
+      testCaseId: testFileScenarios.scenarioId,
+      testTitle: testFileScenarios.testTitle,
+      scenarioTitle: scenarios.title,
+    })
+    .from(testFileScenarios)
+    .innerJoin(
+      scenarios,
+      eq(testFileScenarios.scenarioId, scenarios.id),
+    )
+    .where(eq(testFileScenarios.testFileId, run.testFileId))
+    .all();
+
+  return {
+    ...run,
+    testCases,
+  };
+});
+
+res.json(enrichedRows);
 });
 
   router.get("/:id", (req, res) => {
-    const run = db.select().from(testRuns).where(eq(testRuns.id, req.params.id)).get();
-    if (!run) {
-      res.status(404).json({ error: "Test run not found" });
-      return;
-    }
-    const cases = db.select().from(testRunCases).where(eq(testRunCases.testRunId, run.id)).all();
-    res.json({ run, cases });
+  const run = db
+    .select()
+    .from(testRuns)
+    .where(eq(testRuns.id, req.params.id))
+    .get();
+
+  if (!run) {
+    res.status(404).json({ error: "Test run not found" });
+    return;
+  }
+
+  const cases = db
+    .select()
+    .from(testRunCases)
+    .where(eq(testRunCases.testRunId, run.id))
+    .all();
+
+  const testCases = db
+    .select({
+      id: testFileScenarios.id,
+      testCaseId: testFileScenarios.scenarioId,
+      title: testFileScenarios.testTitle,
+      scenarioTitle: scenarios.title,
+    })
+    .from(testFileScenarios)
+    .innerJoin(
+      scenarios,
+      eq(testFileScenarios.scenarioId, scenarios.id),
+    )
+    .where(eq(testFileScenarios.testFileId, run.testFileId))
+    .all();
+
+  res.json({
+    run,
+    cases,
+    testCases,
   });
+});
 
   return router;
 }

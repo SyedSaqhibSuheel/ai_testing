@@ -90,7 +90,17 @@ listApplications: () =>
 
   return request<TestRun[]>(`/test-runs${qs ? `?${qs}` : ""}`);
 },
-  getTestRun: (id: string) => request<{ run: TestRun; cases: TestRunCase[] }>(`/test-runs/${id}`),
+getTestRun: (id: string) =>
+  request<{
+    run: TestRun;
+    cases: TestRunCase[];
+    testCases: {
+      id: string;
+      testCaseId: string;
+      title: string;
+      scenarioTitle: string;
+    }[];
+  }>(`/test-runs/${id}`),
 
   // Git
   getGitStatus: () => request<{ dir: string; branch: string; changedFiles: string[]; isClean: boolean }>("/git/status"),
