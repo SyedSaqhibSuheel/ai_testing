@@ -200,6 +200,12 @@ export const testRuns = sqliteTable("test_runs", {
   skippedCount: integer("skipped_count"),
   artifactsDir: text("artifacts_dir"),
   errorMessage: text("error_message"),
+  // The actual resolved app URL this specific run targeted (settings.testAppUrl
+  // or the active URL profile at the time of the run). Persisted so test
+  // history can be grouped/filtered by website even after settings change -
+  // see server/utils/websiteResolver.ts for the fallback used on older rows
+  // that predate this column.
+  appUrl: text("app_url"),
 });
 
 export const testRunCases = sqliteTable("test_run_cases", {

@@ -6,6 +6,7 @@ import { Requirements } from "@/pages/Requirements";
 import { RequirementDetail } from "@/pages/RequirementDetail";
 import { Scenarios } from "@/pages/Scenarios";
 import { TestFiles } from "@/pages/TestFiles";
+import { TestHistory } from "@/pages/TestHistory";
 import { GitPage } from "@/pages/Git";
 import { AgentActivity } from "@/pages/AgentActivity";
 import { SettingsPage } from "@/pages/Settings";
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/requirements/:id" element={<RequirementDetail />} />
         <Route path="/scenarios" element={<Scenarios />} />
         <Route path="/test-files" element={<TestFiles />} />
+        <Route path="/test-history" element={<TestHistory />} />
         <Route path="/git" element={<GitPage />} />
         <Route path="/agents" element={<AgentActivity />} />
         <Route path="/settings" element={<SettingsPage />} />

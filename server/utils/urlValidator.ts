@@ -114,7 +114,7 @@ function isValidHostname(hostname: string): boolean {
 /**
  * Test connectivity to a URL with detailed diagnostics
  */
-export async function testURLConnectivity(urlString: string, timeout: number = 5000): Promise<URLDiagnostics> {
+export async function testURLConnectivity(urlString: string, timeout: number = 15000): Promise<URLDiagnostics> {
   // Validate URL format first
   const validation = validateURL(urlString);
   if (!validation.isValid) {
@@ -190,7 +190,7 @@ export function getErrorMessage(diagnostics: URLDiagnostics): string {
 
   switch (diagnostics.errorType) {
     case 'TIMEOUT':
-      return `⏱️ Request timed out. Server took longer than 5 seconds to respond. Check if the server is running and not overloaded.`;
+      return `⏱️ Request timed out. Server took longer than 15 seconds to respond. Check if the server is running and not overloaded.`;
 
     case 'CONNECTION_REFUSED':
       return `🔴 Connection refused. No server is listening on this address/port. Is the service running?`;

@@ -158,6 +158,7 @@ export interface MaskedSettings {
   secretsPresent: { anthropicApiKey: boolean; openaiApiKey: boolean; geminiApiKey: boolean };
   appBaseUrl: string;
   apiBaseUrl: string;
+  testAppUrl?: string;
 }
 
 export interface GitCommitRecord {
@@ -187,6 +188,7 @@ export interface TestRun {
   skippedCount: number | null;
   artifactsDir: string | null;
   errorMessage: string | null;
+  appUrl: string | null;
 }
 
 export type DefectClass = "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE";
@@ -210,6 +212,32 @@ export interface TestRunCase {
   classificationEvidence: string[] | null;
   classificationReasoning: string | null;
   suggestedFix: string | null;
+}
+
+// One row per test execution, flattened across every requirement/test file -
+// powers the "Test History" page (Website -> Date -> Test Case -> Execution).
+// "Test case" == a requirement (stable id/title across test-file
+// regenerations); see server/routes/testHistory.ts for how this is composed.
+export interface TestHistoryEntry {
+  testRunId: string;
+  testFileId: string;
+  requirementId: string;
+  testCaseName: string;
+  filePath: string;
+  website: string;
+  appUrl: string | null;
+  isLatestFile: boolean;
+  fileStatus: TestFileStatus;
+  status: TestRunStatus;
+  triggeredBy: TestRunTrigger;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  totalTests: number | null;
+  passedCount: number | null;
+  failedCount: number | null;
+  skippedCount: number | null;
+  errorMessage: string | null;
 }
 
 export interface DashboardSummary {

@@ -89,8 +89,46 @@ export function checkLocatorHallucination(code: string, confirmedTestIds: Set<st
   return { valid: true };
 }
 
+/**
+ * Playwright refuses to load a spec file that declares two test()s with the
+ * same title under the same describe() - it silently reports "0 tests
+ * matched" at run time instead of surfacing this, which is a confusing dead
+ * end (see the LLM occasionally emitting the same scenario title twice with
+ * different bodies, e.g. a "Gap: ..." stub followed by a real attempt).
+ * Catching it here at generation time gives an immediate, actionable error
+ * instead of a mystery "0 tests" failure on the next test run.
+ */
+export function checkDuplicateTestTitles(code: string): ValidationResult {
+  const sourceFile = ts.createSourceFile("generated.spec.ts", code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "test" &&
+      node.arguments[0] &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      const title = (node.arguments[0] as ts.StringLiteralLike).text;
+      if (seen.has(title)) duplicates.add(title);
+      seen.add(title);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+
+  if (duplicates.size > 0) {
+    return { valid: false, error: `Generated code declares duplicate test title(s), which Playwright refuses to run: ${[...duplicates].join(", ")}` };
+  }
+  return { valid: true };
+}
+
 export function validateGeneratedTest(code: string, confirmedTestIds: Set<string>): ValidationResult {
   const syntax = checkSyntax(code);
   if (!syntax.valid) return syntax;
+  const duplicates = checkDuplicateTestTitles(code);
+  if (!duplicates.valid) return duplicates;
   return checkLocatorHallucination(code, confirmedTestIds);
 }

@@ -10,6 +10,7 @@ import type {
   Scenario,
   TestFile,
   TestFileScenarioMapping,
+  TestHistoryEntry,
   TestRun,
   TestRunCase,
 } from "./types";
@@ -74,6 +75,9 @@ export const api = {
   // Test runs (CI/CD: real `npx playwright test` execution + report)
   listTestRuns: (testFileId?: string) => request<TestRun[]>(`/test-runs${testFileId ? `?testFileId=${testFileId}` : ""}`),
   getTestRun: (id: string) => request<{ run: TestRun; cases: TestRunCase[] }>(`/test-runs/${id}`),
+
+  // Test history (cross-requirement execution feed, powers "Test History")
+  getTestHistory: () => request<TestHistoryEntry[]>("/test-history"),
 
   // Git
   getGitStatus: () => request<{ dir: string; branch: string; changedFiles: string[]; isClean: boolean }>("/git/status"),
