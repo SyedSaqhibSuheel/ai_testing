@@ -1,3 +1,12 @@
+export interface Application {
+  id: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 export type RequirementStatus =
   | "submitted"
   | "analyzing"
@@ -189,6 +198,11 @@ export interface TestRun {
   artifactsDir: string | null;
   errorMessage: string | null;
   appUrl: string | null;
+  testCases?: {
+    testCaseId: string;
+    testTitle: string;
+    scenarioTitle: string;
+  }[];
 }
 
 export type DefectClass = "ENVIRONMENT_ERROR" | "TEST_SCRIPT_ERROR" | "UI_LOCATOR_CHANGE" | "REAL_DEFECT" | "INCONCLUSIVE";

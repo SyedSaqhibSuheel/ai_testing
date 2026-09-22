@@ -48,7 +48,7 @@ export function SettingsPage() {
   return (
     <div>
       <PageHeader title="Settings" subtitle="Platform configuration - secrets are never shown here, only whether they're set" />
-      <div className="p-8 space-y-8 max-w-2xl">
+     <div className="w-full max-w-6xl space-y-8 p-4 sm:p-6 md:p-8">
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Your identity</h2>
           <Card className="p-4">

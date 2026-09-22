@@ -2,6 +2,7 @@ import express from "express";
 import { loadConfig } from "../src/config.js";
 import { createDb } from "./db/client.js";
 import { requirementsRouter } from "./routes/requirements.js";
+import { applicationsRouter } from "./routes/applications.js";
 import { scenariosRouter } from "./routes/scenarios.js";
 import { settingsRouter } from "./routes/settings.js";
 import { agentRunsRouter } from "./routes/agentRuns.js";
@@ -29,6 +30,7 @@ app.use(express.json());
 // path isn't swallowed as an :id param.
 attachSseHub(db, app);
 
+app.use("/api/applications", applicationsRouter(db));
 app.use("/api/requirements", requirementsRouter(db, config, urlConfigService));
 app.use("/api/scenarios", scenariosRouter(db, config, urlConfigService));
 app.use("/api/settings", settingsRouter(db, config));

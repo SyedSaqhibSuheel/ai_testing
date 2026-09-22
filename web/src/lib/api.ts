@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type {
   AgentRun,
+  Application,
   DashboardSummary,
   ExplorationRun,
   GitCommitRecord,
@@ -46,8 +47,16 @@ export const api = {
   generateRequirement: (id: string) => request(`/requirements/${id}/generate`, { method: "POST" }),
   getExploration: (id: string) => request<ExplorationRun>(`/requirements/${id}/exploration`).catch(() => null),
 
+ // Applications
+listApplications: () =>
+  request<Application[]>("/applications"),
+
   // Scenarios
-  listScenarios: (params?: { requirementId?: string; status?: string }) => {
+ listScenarios: (params?: {
+  requirementId?: string;
+  applicationId?: string;
+  status?: string;
+}) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     return request<Scenario[]>(`/scenarios${qs ? `?${qs}` : ""}`);
   },
@@ -73,8 +82,26 @@ export const api = {
   runTestFile: (id: string) => request(`/test-files/${id}/run`, { method: "POST" }),
 
   // Test runs (CI/CD: real `npx playwright test` execution + report)
-  listTestRuns: (testFileId?: string) => request<TestRun[]>(`/test-runs${testFileId ? `?testFileId=${testFileId}` : ""}`),
-  getTestRun: (id: string) => request<{ run: TestRun; cases: TestRunCase[] }>(`/test-runs/${id}`),
+  listTestRuns: (params?: { testFileId?: string; applicationId?: string }) => {
+  const qs = new URLSearchParams(
+    Object.entries(params ?? {}).filter(
+      ([, value]) => typeof value === "string",
+    ) as [string, string][],
+  ).toString();
+
+  return request<TestRun[]>(`/test-runs${qs ? `?${qs}` : ""}`);
+},
+getTestRun: (id: string) =>
+  request<{
+    run: TestRun;
+    cases: TestRunCase[];
+    testCases: {
+      id: string;
+      testCaseId: string;
+      title: string;
+      scenarioTitle: string;
+    }[];
+  }>(`/test-runs/${id}`),
 
   // Test history (cross-requirement execution feed, powers "Test History")
   getTestHistory: () => request<TestHistoryEntry[]>("/test-history"),
