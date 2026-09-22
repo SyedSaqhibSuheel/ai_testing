@@ -75,7 +75,16 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
       ...((exploration?.discoveredRoutes as string[] | undefined) ?? []),
     ]);
 
-    const login = config.appLoginUsername && config.appLoginPassword ? { username: config.appLoginUsername, password: config.appLoginPassword } : undefined;
+    const login =
+      config.appLoginUsername && config.appLoginPassword
+        ? {
+            username: config.appLoginUsername,
+            password: config.appLoginPassword,
+            usernameLocator: config.appLoginUsernameLocator,
+            passwordLocator: config.appLoginPasswordLocator,
+            submitLocator: config.appLoginSubmitLocator,
+          }
+        : undefined;
 
     // Get the configured test app URL from database, fallback to .env
     const settings = getPlatformSettings(db, config);
