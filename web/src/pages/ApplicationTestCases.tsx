@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
@@ -7,8 +7,10 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import { api } from "@/lib/api";
 
 export function ApplicationTestCases() {
-  const { id } = useParams<{ id: string }>();
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+ const { id } = useParams<{ id: string }>();
+   const queryClient = useQueryClient();
+const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+const [runningTestFileId, setRunningTestFileId] = useState<string | null>(null);
 
   const { data: applications, isLoading: applicationsLoading } = useQuery({
     queryKey: ["applications"],
@@ -213,7 +215,6 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
               </p>
             </Card>
           )}
-
         {!testRunsLoading &&
           !testRunsError &&
           Object.keys(runsByDate).length > 0 && (
@@ -221,58 +222,59 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
               {Object.entries(runsByDate).map(([date, runs]) => (
                 <Card key={date} className="overflow-hidden">
                   <div className="px-5 py-4 border-b border-border">
-                    <h3 className="font-semibold">{date}</h3>
-                    <p className="text-xs text-muted mt-1">
-                      {runs?.length ?? 0} execution
-                      {(runs?.length ?? 0) === 1 ? "" : "s"}
-                    </p>
+                    <div>
+                      <h3 className="font-semibold">{date}</h3>
+                      <p className="text-xs text-muted mt-1">
+                        {runs?.length ?? 0} execution
+                        {(runs?.length ?? 0) === 1 ? "" : "s"}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="divide-y divide-border">
                     {runs?.map((run) => (
-                     <div
-    
-  key={run.id}
-  onClick={() => setSelectedRunId(run.id)}
-  className="p-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-muted/10"
->
-  <div>
-    <div className="font-medium">
-      {run.testCases?.[0]?.testTitle ?? "Execution"}
-    </div>
+                      <div
+                        key={run.id}
+                        onClick={() => setSelectedRunId(run.id)}
+                        className="p-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between cursor-pointer hover:bg-muted/10"
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {run.testCases?.[0]?.testTitle ?? "Execution"}
+                          </div>
 
-    {run.testCases?.[0] && (
-      <div className="text-xs text-muted mt-1">
-        Test Case ID: {run.testCases[0].testCaseId}
-      </div>
-    )}
+                          {run.testCases?.[0] && (
+                            <div className="text-xs text-muted mt-1">
+                              Test Case ID: {run.testCases[0].testCaseId}
+                            </div>
+                          )}
 
-    <div className="text-xs text-muted mt-1">
-      {new Date(run.startedAt).toLocaleTimeString(
-        "en-IN",
-        {
-          hour: "2-digit",
-          minute: "2-digit",
-        },
-      )}
-    </div>
+                          <div className="text-xs text-muted mt-1">
+                            {new Date(run.startedAt).toLocaleTimeString(
+                              "en-IN",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </div>
 
-    <div className="text-xs text-muted mt-1">
-      Run ID: {run.id}
-    </div>
-  </div>
-
-  <StatusBadge status={run.status} />
-</div>
-))}
+                          <div className="text-xs text-muted mt-1">
+                            Run ID: {run.id}
+                          </div>
+                        </div>
+                        <StatusBadge status={run.status} />
+                      </div>
+                    ))}
                   </div>
                 </Card>
               ))}
             </div>
-                    )}
+          )}
 
-        {selectedRunId && (
-          <Card className="overflow-hidden">
+
+  {selectedRunId && (
+  <Card className="overflow-hidden">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div>
                 <h2 className="font-semibold">Execution Details</h2>
@@ -281,15 +283,41 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedRunId(null)}
-                className="text-sm text-muted hover:text-accent"
-              >
-                Close
-              </button>
-            </div>
+              <div className="flex items-center gap-3">
+  <button
+    type="button"
+    onClick={async () => {
+      if (!selectedRunDetails?.run.testFileId) return;
 
+      setRunningTestFileId(selectedRunDetails.run.testFileId);
+
+      try {
+  await api.runTestFile(selectedRunDetails.run.testFileId);
+
+  await queryClient.invalidateQueries({
+    queryKey: ["test-runs", "application", id],
+  });
+} finally {
+  setRunningTestFileId(null);
+}
+    }}
+    disabled={runningTestFileId === selectedRunDetails?.run.testFileId}
+    className="text-sm text-accent hover:underline disabled:opacity-50"
+  >
+    {runningTestFileId === selectedRunDetails?.run.testFileId
+      ? "Running..."
+      : "Run Again"}
+  </button>
+
+  <button
+    type="button"
+    onClick={() => setSelectedRunId(null)}
+    className="text-sm text-muted hover:text-accent"
+  >
+    Close
+  </button>
+</div>
+ </div>
             {selectedRunLoading && (
               <div className="p-5 text-sm text-muted">
                 Loading execution details...
@@ -434,7 +462,7 @@ selectedRunDetails.testCases.length === 0 ? (
               </div>
             )}
           </Card>
-        )}
+            )}
       </div>
     </div>
   );
