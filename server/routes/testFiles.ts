@@ -8,6 +8,7 @@ import { approveTestFile, rejectTestFile } from "../testFiles/testFileTransition
 import type { URLConfigService } from "../config/urlConfigService.js";
 
 export function testFilesRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
+  const activeAppBaseUrl = () => urlConfigService?.getActiveConfig().appBaseUrl;
   const router = Router();
 
   router.get("/", (req, res) => {
@@ -75,7 +76,7 @@ export function testFilesRouter(db: Db, config: Config, urlConfigService?: URLCo
       return;
     }
     try {
-      const newId = await runGeneratorAgent(db, config, file.requirementId);
+      const newId = await runGeneratorAgent(db, config, file.requirementId, activeAppBaseUrl());
       res.json(db.select().from(testFiles).where(eq(testFiles.id, newId)).get());
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -94,7 +95,7 @@ export function generateRouter(db: Db, config: Config, urlConfigService?: URLCon
       res.status(404).json({ error: "Requirement not found" });
       return;
     }
-    runGeneratorAgent(db, config, req.params.id).catch((err) => {
+    runGeneratorAgent(db, config, req.params.id, urlConfigService?.getActiveConfig().appBaseUrl).catch((err) => {
       console.error(`Generator agent failed for requirement ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "generating_tests" });

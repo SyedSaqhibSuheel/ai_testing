@@ -107,7 +107,8 @@ export function scenariosRouter(db: Db, config: Config, urlConfigService?: URLCo
       if (!urlConfigService) {
         return res.status(500).json({ error: "URL Config Service not initialized" });
       }
-      const newId = await regenerateScenario(db, config, req.params.id, typeof actor === "string" ? actor : "unknown", feedback, urlConfigService);
+      const activeAppBaseUrl = urlConfigService.getActiveConfig().appBaseUrl;
+      const newId = await regenerateScenario(db, config, req.params.id, typeof actor === "string" ? actor : "unknown", feedback, activeAppBaseUrl);
       res.json(db.select().from(scenarios).where(eq(scenarios.id, newId)).get());
     } catch (err) {
       console.error("[Regenerate Error]", err);

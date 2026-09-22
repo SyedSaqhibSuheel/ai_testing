@@ -4,6 +4,7 @@ import type { Config } from "../../src/config.js";
 import { requirements, scenarios, testFiles, testFileScenarios } from "../db/schema.js";
 import type { Scenario } from "../../src/schemas/testPlan.js";
 import { buildContext } from "../../src/context/buildContext.js";
+import { isKnownAppUrl } from "../config/appProfile.js";
 import { getProvider } from "../../src/llm/index.js";
 import { GeneratedTestFileSchema } from "../schemas/generatedTest.js";
 import { buildGeneratorSystemPrompt, buildGeneratorUserPrompt } from "./generatorPrompts.js";
@@ -38,7 +39,7 @@ function slugify(text: string): string {
  * Callable again to regenerate - always creates a new version rather than
  * overwriting.
  */
-export async function runGeneratorAgent(db: Db, config: Config, requirementId: string): Promise<string> {
+export async function runGeneratorAgent(db: Db, config: Config, requirementId: string, activeAppBaseUrl?: string): Promise<string> {
   const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
@@ -64,19 +65,22 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
       throw new Error("Approved scenarios have no grounded plan - run the Planner first.");
     }
 
-    const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
+    const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
+    const context = isKnownApp ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
     const exploration = getLatestExplorationRun(db, requirementId);
     const confirmedTestIds = new Set<string>([
-      ...context.frontend.components.flatMap((c) => c.testIds),
+      ...(context ? context.frontend.components.flatMap((c) => c.testIds) : []),
       ...((exploration?.discoveredTestIds as Array<{ testId: string }> | undefined)?.map((t) => t.testId) ?? []),
     ]);
     const confirmedRoutes = new Set<string>([
-      ...context.frontend.routes.map((r) => r.path),
+      ...(context ? context.frontend.routes.map((r) => r.path) : []),
       ...((exploration?.discoveredRoutes as string[] | undefined) ?? []),
     ]);
 
+    // CallCenterUI's own login credentials only apply when the active target
+    // IS CallCenterUI - a different site's login has nothing to do with them.
     const login =
-      config.appLoginUsername && config.appLoginPassword
+      isKnownApp && config.appLoginUsername && config.appLoginPassword
         ? {
             username: config.appLoginUsername,
             password: config.appLoginPassword,

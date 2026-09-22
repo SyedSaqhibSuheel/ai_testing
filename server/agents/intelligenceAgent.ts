@@ -3,7 +3,8 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { requirements, requirementAnalyses, scenarios, approvalAuditLog } from "../db/schema.js";
 import { buildContext } from "../../src/context/buildContext.js";
-import { selectRelevantContext } from "../../src/context/selectRelevantContext.js";
+import { selectRelevantContext, type RelevantContext } from "../../src/context/selectRelevantContext.js";
+import { isKnownAppUrl } from "../config/appProfile.js";
 import { getProvider } from "../../src/llm/index.js";
 import { IntelligenceAnalysisSchema, type IntelligenceAnalysis, type DraftScenario } from "../schemas/analysis.js";
 import { buildIntelligenceSystemPrompt, buildIntelligenceUserPrompt, buildRegenerateUserPrompt } from "./intelligencePrompts.js";
@@ -17,9 +18,12 @@ function extractJson(text: string): unknown {
   return JSON.parse(fenced ? fenced[1] : text);
 }
 
-async function callIntelligenceLlm(config: Config, requirementText: string): Promise<IntelligenceAnalysis> {
-  const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
-  const relevant = selectRelevantContext(requirementText, context);
+const EMPTY_CONTEXT: RelevantContext = { controllers: [], dtos: [], components: [], routes: [] };
+
+async function callIntelligenceLlm(config: Config, requirementText: string, isKnownApp: boolean): Promise<IntelligenceAnalysis> {
+  const relevant = isKnownApp
+    ? selectRelevantContext(requirementText, buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir))
+    : EMPTY_CONTEXT;
   const provider = getProvider(config);
 
   const system = buildIntelligenceSystemPrompt();
@@ -82,7 +86,7 @@ function insertScenarioFromDraft(
  * draft scenario list (status `ai_proposed`) for human review. Does not
  * ground scenarios against the live app - that's the Planner's job.
  */
-export async function runIntelligenceAgent(db: Db, config: Config, requirementId: string): Promise<void> {
+export async function runIntelligenceAgent(db: Db, config: Config, requirementId: string, activeAppBaseUrl?: string): Promise<void> {
   const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
@@ -91,7 +95,8 @@ export async function runIntelligenceAgent(db: Db, config: Config, requirementId
 
   try {
     updateAgentRunTask(db, runId, "Analyzing");
-    const analysis = await callIntelligenceLlm(config, requirement.rawText);
+    const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
+    const analysis = await callIntelligenceLlm(config, requirement.rawText, isKnownApp);
 
     const analysisRow = db
       .insert(requirementAnalyses)
@@ -135,11 +140,19 @@ export async function runIntelligenceAgent(db: Db, config: Config, requirementId
  * the old row (kept for audit history, never hard-deleted) and inserts a new
  * `ai_proposed` scenario in its place, on the same requirement/analysis.
  */
-export async function regenerateScenario(db: Db, config: Config, scenarioId: string, actor: string, feedback?: string, urlConfigService?: any): Promise<string> {
+export async function regenerateScenario(
+  db: Db,
+  config: Config,
+  scenarioId: string,
+  actor: string,
+  feedback?: string,
+  activeAppBaseUrl?: string
+): Promise<string> {
   const scenario = db.select().from(scenarios).where(eq(scenarios.id, scenarioId)).get();
   if (!scenario) throw new Error(`Scenario ${scenarioId} not found`);
   const requirement = db.select().from(requirements).where(eq(requirements.id, scenario.requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${scenario.requirementId} not found`);
+  const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
 
   const runId = startAgentRun(db, {
     agentType: "intelligence",
@@ -150,8 +163,9 @@ export async function regenerateScenario(db: Db, config: Config, scenarioId: str
   updateAgentRunTask(db, runId, "Analyzing");
 
   try {
-    const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
-    const relevant = selectRelevantContext(requirement.rawText, context);
+    const relevant = isKnownApp
+      ? selectRelevantContext(requirement.rawText, buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir))
+      : EMPTY_CONTEXT;
     const provider = getProvider(config);
 
     const result = await provider.chat(

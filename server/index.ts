@@ -28,7 +28,7 @@ app.use(express.json());
 // path isn't swallowed as an :id param.
 attachSseHub(db, app);
 
-app.use("/api/requirements", requirementsRouter(db, config));
+app.use("/api/requirements", requirementsRouter(db, config, urlConfigService));
 app.use("/api/scenarios", scenariosRouter(db, config, urlConfigService));
 app.use("/api/settings", settingsRouter(db, config));
 app.use("/api/agent-runs", agentRunsRouter(db));
