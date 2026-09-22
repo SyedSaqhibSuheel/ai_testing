@@ -13,6 +13,9 @@ export interface PlatformSettings {
   agentTimeoutMs: number;
   managedRepoDir: string;
   managedRepoBranch: string;
+  appBaseUrl: string;
+  apiBaseUrl: string;
+  testAppUrl?: string; // Flexible test app URL, set from Settings panel
 }
 
 const SETTINGS_DEFAULTS = {
@@ -41,6 +44,9 @@ export function getPlatformSettings(db: Db, config: Config): PlatformSettings {
     agentTimeoutMs: getSetting(db, "agentTimeoutMs", SETTINGS_DEFAULTS.agentTimeoutMs),
     managedRepoDir: getSetting(db, "managedRepoDir", config.managedRepoDir),
     managedRepoBranch: getSetting(db, "managedRepoBranch", config.managedRepoBranch),
+    appBaseUrl: config.appBaseUrl,
+    apiBaseUrl: config.apiBaseUrl,
+    testAppUrl: getSetting(db, "testAppUrl", undefined),
   };
 }
 
@@ -71,6 +77,7 @@ const UPDATABLE_KEYS = new Set<keyof PlatformSettings>([
   "agentTimeoutMs",
   "managedRepoDir",
   "managedRepoBranch",
+  "testAppUrl",
 ]);
 
 export function updatePlatformSettings(db: Db, patch: Partial<PlatformSettings>): void {

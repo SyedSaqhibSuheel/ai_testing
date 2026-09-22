@@ -21,13 +21,25 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
   const [actorEmail, setActorEmail] = useState(() => localStorage.getItem("actorEmail") ?? "");
+  const [testAppUrl, setTestAppUrl] = useState(() => "");
 
   useEffect(() => {
     localStorage.setItem("actorEmail", actorEmail);
   }, [actorEmail]);
 
+  useEffect(() => {
+    if (settings?.testAppUrl) {
+      setTestAppUrl(settings.testAppUrl);
+    }
+  }, [settings?.testAppUrl]);
+
   const updateMode = useMutation({
     mutationFn: (approvalMode: ApprovalMode) => api.updateSettings({ approvalMode }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  });
+
+  const updateTestAppUrl = useMutation({
+    mutationFn: (url: string) => api.updateSettings({ testAppUrl: url || undefined }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
   });
 
@@ -127,6 +139,33 @@ export function SettingsPage() {
             <div className="flex justify-between">
               <span className="text-muted">Branch</span>
               <span>{settings.managedRepoBranch}</span>
+            </div>
+          </Card>
+        </div>
+
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Application under test</h2>
+          <Card className="p-4 space-y-3">
+            <div>
+              <label className="text-xs text-muted block mb-1.5">Test App URL (flexible - overrides default)</label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 bg-panel-2 border border-border rounded-md px-3 py-2 text-sm"
+                  value={testAppUrl}
+                  onChange={(e) => setTestAppUrl(e.target.value)}
+                  placeholder="https://www.saucedemo.com"
+                />
+                <Button
+                  onClick={() => updateTestAppUrl.mutate(testAppUrl)}
+                  disabled={updateTestAppUrl.isPending}
+                  className="px-4"
+                >
+                  {updateTestAppUrl.isPending ? "Saving..." : "Save"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted mt-2">
+                This URL will be used for all generated tests. Leave empty to use default from environment.
+              </p>
             </div>
           </Card>
         </div>

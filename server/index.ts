@@ -12,6 +12,7 @@ import { dashboardRouter } from "./routes/dashboard.js";
 import { createUrlConfigRouter } from "./routes/urlConfig.js";
 import { URLConfigService } from "./config/urlConfigService.js";
 import { testRunsRouter, runTestRouter } from "./routes/testRuns.js";
+import { testHistoryRouter } from "./routes/testHistory.js";
 import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
@@ -38,6 +39,7 @@ app.use("/api/test-files", runTestRouter(db, config, urlConfigService));
 app.use("/api", generateRouter(db, config, urlConfigService));
 app.use("/api/git", gitRouter(db, config));
 app.use("/api/test-runs", testRunsRouter(db, config, urlConfigService));
+app.use("/api/test-history", testHistoryRouter(db, config));
 app.use("/api/dashboard", dashboardRouter(db));
 app.use("/api/url-config", createUrlConfigRouter(db, config));
 

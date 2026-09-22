@@ -5,6 +5,7 @@ import type { Config } from "../../src/config.js";
 import { testFiles, testRuns, testRunCases } from "../db/schema.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
+import { getPlatformSettings } from "../settings/settingsService.js";
 
 export function testRunsRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
@@ -41,11 +42,17 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
       res.status(404).json({ error: "Test file not found" });
       return;
     }
-    // Get active URL configuration for test execution
+    // Resolve the app URL to run against. Preferred source: the DB-persisted
+    // testAppUrl setting (same one the Generator and Planner use). The
+    // urlConfigService "active profile" is in-memory only - it resets to
+    // "default" (localhost) on every server restart - so it's just a
+    // last-resort fallback, never allowed to override an explicit testAppUrl.
+    const settings = getPlatformSettings(db, config);
     const activeUrlConfig = urlConfigService ? urlConfigService.getActiveConfig() : { appBaseUrl: config.appBaseUrl };
+    const targetAppUrl = settings.testAppUrl || activeUrlConfig.appBaseUrl;
     // Fire-and-forget, matching every other agent trigger in this app - the
     // client polls GET /api/test-runs?testFileId=... for the new run.
-    runPlaywrightTest(db, config, req.params.id, "manual", activeUrlConfig.appBaseUrl).catch((err) => {
+    runPlaywrightTest(db, config, req.params.id, "manual", targetAppUrl).catch((err) => {
       console.error(`Manual test run failed for test file ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "running" });

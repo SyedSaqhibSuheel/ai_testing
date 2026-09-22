@@ -75,7 +75,16 @@ export async function runPlaywrightTest(
   const file = db.select().from(testFiles).where(eq(testFiles.id, testFileId)).get();
   if (!file) throw new Error(`Test file ${testFileId} not found`);
 
-  const runRow = db.insert(testRuns).values({ testFileId, triggeredBy, status: "running" }).returning({ id: testRuns.id }).get();
+  // Resolved once up front (rather than inside the spawn Promise below) so it
+  // can be persisted on the run row itself - this is what lets test history
+  // be grouped/filtered by website even after settings.testAppUrl changes later.
+  const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
+
+  const runRow = db
+    .insert(testRuns)
+    .values({ testFileId, triggeredBy, status: "running", appUrl: targetAppUrl })
+    .returning({ id: testRuns.id })
+    .get();
   const runId = runRow.id;
   const artifactsDir = path.join("test-results", runId);
   const jsonReportPath = path.join(config.managedRepoDir, artifactsDir, "report.json");
@@ -92,7 +101,12 @@ export async function runPlaywrightTest(
         `Test file is "${file.status}", not "committed" - it hasn't been written into the managed repo yet, so there's nothing on disk to run. Commit it to Git first.`
       );
     }
-    const playwrightBin = path.join(config.managedRepoDir, "node_modules", ".bin", "playwright");
+    // On Windows, node_modules/.bin/playwright (no extension) is a POSIX
+    // shebang script - CreateProcess can't run it directly (spawn fails with
+    // ENOENT even though the file exists). The .cmd wrapper is what Windows
+    // can actually execute.
+    const playwrightBinName = process.platform === "win32" ? "playwright.cmd" : "playwright";
+    const playwrightBin = path.join(config.managedRepoDir, "node_modules", ".bin", playwrightBinName);
     if (!existsSync(playwrightBin)) {
       throw new Error(
         `@playwright/test isn't installed in the managed repo (${config.managedRepoDir}). Run "npm install" there first.`
@@ -104,11 +118,26 @@ export async function runPlaywrightTest(
     }
 
     await new Promise<void>((resolve, reject) => {
-      // Per-run target URL: an explicit appBaseUrl (from the active URL
-      // config) wins, otherwise fall back to the configured default.
-      const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
-      const child = spawn(playwrightBin, ["test", file.filePath, `--output=${artifactsDir}`], {
+      // Node refuses to spawn .cmd/.bat directly without shell:true (EINVAL)
+      // as of the Windows batch-file argument-injection security fix - needed
+      // here since playwrightBin is playwright.cmd on win32. But with
+      // shell:true, Node only wraps the *entire* joined command+args in one
+      // outer pair of quotes - it does NOT quote each argument individually.
+      // managedRepoDir can contain spaces (e.g. "...\ai testing\..."), so
+      // cmd.exe re-splits on that space and fails with "'C:\...\ai' is not
+      // recognized...". Quoting each space-containing token ourselves and
+      // passing the whole thing as `command` (with empty args) avoids that -
+      // cmd.exe's own outer-quote-stripping then reveals our inner quotes intact.
+      const quote = (s: string) => (/\s/.test(s) ? `"${s}"` : s);
+      const isWin = process.platform === "win32";
+      const commandLine = isWin
+        ? [quote(playwrightBin), "test", quote(file.filePath), `--output=${artifactsDir}`].join(" ")
+        : playwrightBin;
+      const spawnArgs = isWin ? [] : ["test", file.filePath, `--output=${artifactsDir}`];
+
+      const child = spawn(commandLine, spawnArgs, {
         cwd: config.managedRepoDir,
+        shell: isWin,
         env: {
           ...process.env,
           PLAYWRIGHT_BASE_URL: targetAppUrl,

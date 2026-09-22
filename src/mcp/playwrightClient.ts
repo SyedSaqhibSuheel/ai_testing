@@ -38,7 +38,12 @@ function resolveBin(rootDir: string): string {
  */
 export async function startPlaywrightMcp(rootDir: string, headless: boolean): Promise<PlaywrightMcpSession> {
   const bin = resolveBin(rootDir);
-  const args = ["--browser", "chromium", "--isolated"];
+  // "chrome" resolves to the system-installed Google Chrome (a channel),
+  // not Playwright's own bundled Chromium build - this environment's
+  // network blocks the cdn.playwright.dev download used to fetch that
+  // bundled browser, so this avoids needing it entirely (same fix already
+  // applied to the generated-tests-repo runner).
+  const args = ["--browser", "chrome", "--isolated"];
   if (headless) args.push("--headless");
 
   const transport = new StdioClientTransport({ command: bin, args, stderr: "pipe" });

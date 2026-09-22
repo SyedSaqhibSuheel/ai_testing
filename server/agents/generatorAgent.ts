@@ -77,11 +77,15 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
 
     const login = config.appLoginUsername && config.appLoginPassword ? { username: config.appLoginUsername, password: config.appLoginPassword } : undefined;
 
+    // Get the configured test app URL from database, fallback to .env
+    const settings = getPlatformSettings(db, config);
+    const testAppUrl = settings.testAppUrl || config.appBaseUrl;
+
     const provider = getProvider(config);
     const chatResult = await provider.chat(
       [
         { role: "system", text: buildGeneratorSystemPrompt() },
-        { role: "user", text: buildGeneratorUserPrompt(requirement.title, groundedScenarios, [...confirmedTestIds], [...confirmedRoutes], login) },
+        { role: "user", text: buildGeneratorUserPrompt(requirement.title, groundedScenarios, [...confirmedTestIds], [...confirmedRoutes], login, testAppUrl) },
       ],
       []
     );

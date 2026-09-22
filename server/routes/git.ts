@@ -5,6 +5,7 @@ import type { Config } from "../../src/config.js";
 import { gitCommits } from "../db/schema.js";
 import { getRepoStatus, getCommitHistory, commitApprovedTestFiles } from "../git/managedRepo.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
+import { getPlatformSettings } from "../settings/settingsService.js";
 
 export function gitRouter(db: Db, config: Config): Router {
   const router = Router();
@@ -70,8 +71,12 @@ export function gitRouter(db: Db, config: Config): Router {
       // "Commit to Git -> CI/CD runs the code -> report appears in the
       // dashboard": fire-and-forget so the commit response isn't held up by
       // a real browser test run. The client polls GET /api/test-runs.
+      // Same DB-persisted testAppUrl the Generator/Planner use, rather than
+      // silently falling all the way back to config.appBaseUrl (.env,
+      // typically the platform's own localhost address).
+      const { testAppUrl } = getPlatformSettings(db, config);
       for (const id of testFileIds) {
-        runPlaywrightTest(db, config, id, "auto_after_commit").catch((err) => {
+        runPlaywrightTest(db, config, id, "auto_after_commit", testAppUrl).catch((err) => {
           console.error(`Auto test run failed for test file ${id}:`, err);
         });
       }
