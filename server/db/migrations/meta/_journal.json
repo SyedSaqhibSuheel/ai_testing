@@ -29,6 +29,13 @@
       "when": 1789548900000,
       "tag": "0003_add_test_run_app_url",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789635300000,
+      "tag": "0004_add_auto_run_on_commit",
+      "breakpoints": true
     }
   ]
 }

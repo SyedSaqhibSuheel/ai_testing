@@ -141,6 +141,11 @@ export const testFiles = sqliteTable("test_files", {
   validationError: text("validation_error"),
   generatedByAgentRunId: text("generated_by_agent_run_id"),
   isLatest: integer("is_latest", { mode: "boolean" }).notNull().default(true),
+  // Off for test files that navigate to a live third-party site (e.g. real
+  // amazon.com) - repeated automated hits from every auto-after-commit run
+  // trip the site's own bot detection (CAPTCHA challenges), so those files
+  // must be run manually and sparingly instead.
+  autoRunOnCommit: integer("auto_run_on_commit", { mode: "boolean" }).notNull().default(true),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by"),
