@@ -49,7 +49,14 @@ export function Requirements() {
             {requirements?.map((r) => (
               <Link key={r.id} to={`/requirements/${r.id}`} className="flex items-center justify-between gap-4 p-4 hover:bg-panel-2 transition-colors">
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{r.title}</div>
+                  <div className="text-sm font-medium truncate flex items-center gap-2">
+                    {r.title}
+                    {r.source === "code_analysis" && (
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-accent bg-accent/10 rounded px-1.5 py-0.5">
+                        From code
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-muted mt-1">
                     {r.submittedBy} &middot; {new Date(r.createdAt).toLocaleString()}
                   </div>

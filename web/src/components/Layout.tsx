@@ -7,6 +7,7 @@ import {
   FileText,
   ListChecks,
   Code2,
+  ScanSearch,
   History,
   GitBranch,
   Activity,
@@ -20,6 +21,7 @@ import { ModeToggle } from "@/components/theme/ModeToggle";
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/requirements", label: "Requirements", icon: FileText },
+  { to: "/code-analysis", label: "Code Analysis", icon: ScanSearch },
   { to: "/scenarios", label: "Scenarios", icon: ListChecks },
   { to: "/test-files", label: "Generated Tests", icon: Code2 },
   { to: "/test-history", label: "Test History", icon: History },

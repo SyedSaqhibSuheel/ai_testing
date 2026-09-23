@@ -18,6 +18,8 @@ export type RequirementStatus =
   | "committed"
   | "failed";
 
+export type RequirementSource = "manual" | "code_analysis";
+
 export interface Requirement {
   id: string;
   title: string;
@@ -25,9 +27,19 @@ export interface Requirement {
   submittedBy: string;
   status: RequirementStatus;
   currentAnalysisId: string | null;
+  source: RequirementSource;
+  sourceModule: string | null;
   isDeleted: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CodeModuleSummary {
+  name: string;
+  relativePath: string;
+  testIdCount: number;
+  requirementId: string | null;
+  requirementStatus: RequirementStatus | null;
 }
 
 export interface RequirementAnalysis {
@@ -136,7 +148,7 @@ export interface TestFileScenarioMapping {
   testTitle: string;
 }
 
-export type AgentType = "intelligence" | "planner" | "generator";
+export type AgentType = "intelligence" | "planner" | "generator" | "code_analysis";
 export type AgentRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export interface AgentRun {

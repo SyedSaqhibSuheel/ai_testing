@@ -14,6 +14,7 @@ import { createUrlConfigRouter } from "./routes/urlConfig.js";
 import { URLConfigService } from "./config/urlConfigService.js";
 import { testRunsRouter, runTestRouter } from "./routes/testRuns.js";
 import { testHistoryRouter } from "./routes/testHistory.js";
+import { codeAnalysisRouter } from "./routes/codeAnalysis.js";
 import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
@@ -43,6 +44,7 @@ app.use("/api/git", gitRouter(db, config));
 app.use("/api/test-runs", testRunsRouter(db, config, urlConfigService));
 app.use("/api/test-history", testHistoryRouter(db, config));
 app.use("/api/dashboard", dashboardRouter(db));
+app.use("/api/code-analysis", codeAnalysisRouter(db, config));
 app.use("/api/url-config", createUrlConfigRouter(db, config));
 
 // Screenshots/traces from test runs. Mounted at the repo root (not

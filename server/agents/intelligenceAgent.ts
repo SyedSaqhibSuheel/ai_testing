@@ -1,17 +1,15 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { requirements, requirementAnalyses, scenarios, approvalAuditLog } from "../db/schema.js";
+import { requirements, scenarios, approvalAuditLog } from "../db/schema.js";
 import { buildContext } from "../../src/context/buildContext.js";
 import { selectRelevantContext, type RelevantContext } from "../../src/context/selectRelevantContext.js";
 import { isKnownAppUrl } from "../config/appProfile.js";
 import { getProvider } from "../../src/llm/index.js";
-import { IntelligenceAnalysisSchema, type IntelligenceAnalysis, type DraftScenario } from "../schemas/analysis.js";
+import { IntelligenceAnalysisSchema, type IntelligenceAnalysis } from "../schemas/analysis.js";
 import { buildIntelligenceSystemPrompt, buildIntelligenceUserPrompt, buildRegenerateUserPrompt } from "./intelligencePrompts.js";
 import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } from "./agentRunTracking.js";
-import { getPlatformSettings } from "../settings/settingsService.js";
-import { shouldAutoApprove } from "../approval/gate.js";
-import { approveScenario } from "../scenarios/scenarioTransitions.js";
+import { persistIntelligenceAnalysis, insertScenarioFromDraft } from "./persistIntelligenceAnalysis.js";
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -53,33 +51,6 @@ async function callIntelligenceLlm(config: Config, requirementText: string, isKn
   }
 }
 
-function insertScenarioFromDraft(
-  db: Db,
-  draft: DraftScenario,
-  requirementId: string,
-  analysisId: string | null
-): string {
-  const row = db
-    .insert(scenarios)
-    .values({
-      requirementId,
-      analysisId: analysisId ?? undefined,
-      sourceType: "ai_generated",
-      title: draft.title,
-      description: draft.description,
-      priority: draft.priority,
-      riskLevel: draft.riskLevel,
-      preconditions: draft.preconditions,
-      draftSteps: draft.draftSteps,
-      expectedResult: draft.expectedResult,
-      aiConfidence: draft.aiConfidence,
-      status: "ai_proposed",
-    })
-    .returning({ id: scenarios.id })
-    .get();
-  return row.id;
-}
-
 /**
  * Runs the AI Testing Intelligence Layer for a requirement: analyzes it into
  * functional requirements/roles/validation rules/risk areas, and proposes a
@@ -98,35 +69,9 @@ export async function runIntelligenceAgent(db: Db, config: Config, requirementId
     const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
     const analysis = await callIntelligenceLlm(config, requirement.rawText, isKnownApp);
 
-    const analysisRow = db
-      .insert(requirementAnalyses)
-      .values({
-        requirementId,
-        agentRunId: runId,
-        functionalRequirements: analysis.functionalRequirements,
-        userRoles: analysis.userRoles,
-        validationRules: analysis.validationRules,
-        riskAreas: analysis.riskAreas,
-        suggestedCoverage: analysis.suggestedCoverage,
-        rawModelOutput: analysis,
-        status: "completed",
-      })
-      .returning({ id: requirementAnalyses.id })
-      .get();
+    const { analysisId, scenarioCount } = persistIntelligenceAnalysis(db, config, requirementId, runId, analysis);
 
-    const { approvalMode } = getPlatformSettings(db, config);
-    const autoApproveG1 = shouldAutoApprove(approvalMode, "G1_scenario_intent", true);
-    for (const draft of analysis.scenarios) {
-      const newId = insertScenarioFromDraft(db, draft, requirementId, analysisRow.id);
-      if (autoApproveG1) approveScenario(db, newId, "system", "system_auto");
-    }
-
-    db.update(requirements)
-      .set({ status: "awaiting_scenario_approval", currentAnalysisId: analysisRow.id, updatedAt: new Date() })
-      .where(eq(requirements.id, requirementId))
-      .run();
-
-    completeAgentRun(db, runId, { analysisId: analysisRow.id, scenarioCount: analysis.scenarios.length });
+    completeAgentRun(db, runId, { analysisId, scenarioCount });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     failAgentRun(db, runId, message);
