@@ -45,10 +45,10 @@
       "breakpoints": true
     },
     {
-      "idx": 4,
+      "idx": 6,
       "version": "6",
-      "when": 1789635300000,
-      "tag": "0004_add_auto_run_on_commit",
+      "when": 1790100000000,
+      "tag": "0006_add_auto_run_on_commit",
       "breakpoints": true
     }
   ]
