@@ -1,8 +1,14 @@
 import { Router } from "express";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { testFiles, testRuns, testRunCases } from "../db/schema.js";
+import {
+  testFiles,
+  testRuns,
+  testRunCases,
+  testFileScenarios,
+  scenarios,
+} from "../db/schema.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
 import { getPlatformSettings } from "../settings/settingsService.js";
@@ -11,23 +17,106 @@ export function testRunsRouter(db: Db, config: Config, urlConfigService?: URLCon
   const router = Router();
 
   router.get("/", (req, res) => {
-    const { testFileId } = req.query;
-    const rows =
-      typeof testFileId === "string"
-        ? db.select().from(testRuns).where(eq(testRuns.testFileId, testFileId)).orderBy(desc(testRuns.startedAt)).all()
-        : db.select().from(testRuns).orderBy(desc(testRuns.startedAt)).limit(100).all();
-    res.json(rows);
-  });
+  const { testFileId, applicationId } = req.query;
+
+  let rows =
+    typeof testFileId === "string"
+      ? db
+          .select()
+          .from(testRuns)
+          .where(eq(testRuns.testFileId, testFileId))
+          .orderBy(desc(testRuns.startedAt))
+          .all()
+      : db
+          .select()
+          .from(testRuns)
+          .orderBy(desc(testRuns.startedAt))
+          .limit(100)
+          .all();
+
+  if (typeof applicationId === "string") {
+    const matchingTestFiles = db
+      .select({ testFileId: testFileScenarios.testFileId })
+      .from(testFileScenarios)
+      .innerJoin(
+        scenarios,
+        eq(testFileScenarios.scenarioId, scenarios.id),
+      )
+      .where(eq(scenarios.applicationId, applicationId))
+      .all();
+
+    const matchingTestFileIds = matchingTestFiles.map(
+      (row) => row.testFileId,
+    );
+
+    rows = rows.filter((run) =>
+      matchingTestFileIds.includes(run.testFileId),
+    );
+  }
+
+  const enrichedRows = rows.map((run) => {
+  const testCases = db
+    .select({
+      testCaseId: testFileScenarios.scenarioId,
+      testTitle: testFileScenarios.testTitle,
+      scenarioTitle: scenarios.title,
+    })
+    .from(testFileScenarios)
+    .innerJoin(
+      scenarios,
+      eq(testFileScenarios.scenarioId, scenarios.id),
+    )
+    .where(eq(testFileScenarios.testFileId, run.testFileId))
+    .all();
+
+  return {
+    ...run,
+    testCases,
+  };
+});
+
+res.json(enrichedRows);
+});
 
   router.get("/:id", (req, res) => {
-    const run = db.select().from(testRuns).where(eq(testRuns.id, req.params.id)).get();
-    if (!run) {
-      res.status(404).json({ error: "Test run not found" });
-      return;
-    }
-    const cases = db.select().from(testRunCases).where(eq(testRunCases.testRunId, run.id)).all();
-    res.json({ run, cases });
+  const run = db
+    .select()
+    .from(testRuns)
+    .where(eq(testRuns.id, req.params.id))
+    .get();
+
+  if (!run) {
+    res.status(404).json({ error: "Test run not found" });
+    return;
+  }
+
+  const cases = db
+    .select()
+    .from(testRunCases)
+    .where(eq(testRunCases.testRunId, run.id))
+    .all();
+
+  const testCases = db
+    .select({
+      id: testFileScenarios.id,
+      testCaseId: testFileScenarios.scenarioId,
+      title: testFileScenarios.testTitle,
+      scenarioTitle: scenarios.title,
+    })
+    .from(testFileScenarios)
+    .innerJoin(
+      scenarios,
+      eq(testFileScenarios.scenarioId, scenarios.id),
+    )
+    .where(eq(testFileScenarios.testFileId, run.testFileId))
+    .all();
+
+  res.json({
+    run,
+    cases,
+    testCases,
   });
+});
 
   return router;
 }

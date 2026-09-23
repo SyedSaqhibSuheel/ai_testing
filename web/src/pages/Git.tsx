@@ -10,7 +10,7 @@ export function GitPage() {
   return (
     <div>
       <PageHeader title="Git Integration" subtitle="Local repository the platform commits AI-generated tests into" />
-      <div className="p-8 space-y-6 max-w-3xl">
+      <div className="w-full max-w-6xl space-y-6 p-4 sm:p-6 md:p-8">
         <Card className="p-4 space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted">Repository</span>

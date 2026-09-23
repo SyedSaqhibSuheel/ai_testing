@@ -604,7 +604,7 @@ export function Dashboard() {
             </div>
 
             {/* Secondary analytics */}
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+         <div className="mt-3 grid gap-3 lg:grid-cols-2">
               <Card className="border-border/70 bg-panel p-5">
                 <div className="mb-5 flex items-center gap-2">
                   <BrainCircuit className="h-4 w-4 text-pink-300" />
@@ -621,7 +621,7 @@ export function Dashboard() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="flex h-28 flex-col justify-end rounded-xl border border-border bg-panel-2/50 p-3">
+                  <div className="flex h-44 flex-col justify-end rounded-xl border border-border bg-panel-2/50 p-3">
                     <div className="flex h-14 items-end gap-1">
                       <div className="h-5 w-full rounded-sm bg-violet-500/40" />
                       <div className="h-9 w-full rounded-sm bg-violet-500/60" />
@@ -639,7 +639,7 @@ export function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex h-28 flex-col justify-end rounded-xl border border-border bg-panel-2/50 p-3">
+                  <div className="flex h-44 flex-col justify-end rounded-xl border border-border bg-panel-2/50 p-3">
                     <div className="flex h-14 items-end gap-1">
                       <div className="h-8 w-full rounded-sm bg-pink-500/40" />
                       <div className="h-12 w-full rounded-sm bg-pink-500/70" />
@@ -657,7 +657,7 @@ export function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="flex h-28 flex-col justify-end rounded-xl border border-border bg-panel-2/50 p-3">
+                  <div className="flex h-44 flex-col justify-end rounded-xl border border-border bg-panel-2/50 p-3">
                     <div className="flex h-14 items-end gap-1">
                       <div className="h-4 w-full rounded-sm bg-rose-500/30" />
                       <div className="h-7 w-full rounded-sm bg-rose-500/50" />

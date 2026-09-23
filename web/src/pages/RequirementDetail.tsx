@@ -169,7 +169,7 @@ function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boole
 
   const { data: runs } = useQuery({
     queryKey: ["test-runs", fileId],
-    queryFn: () => api.listTestRuns(fileId),
+    queryFn: () => api.listTestRuns({ testFileId: fileId }),
     refetchInterval: (query) => (query.state.data?.some((r) => r.status === "running") ? 2000 : false),
   });
 

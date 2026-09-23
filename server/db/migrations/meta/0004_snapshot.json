@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d5075d24-80c8-4c0c-a0aa-b9b5b3d3b7a7",
-  "prevId": "67af9886-bc6d-49e6-8336-c4b101758efc",
+  "id": "86180b91-b5d4-4fd4-8338-e0d0514caccc",
+  "prevId": "d5075d24-80c8-4c0c-a0aa-b9b5b3d3b7a7",
   "tables": {
     "agent_runs": {
       "name": "agent_runs",
@@ -688,6 +688,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "application_id": {
+          "name": "application_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "analysis_id": {
           "name": "analysis_id",
           "type": "text",
@@ -834,7 +841,20 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "scenarios_application_id_applications_id_fk": {
+          "name": "scenarios_application_id_applications_id_fk",
+          "tableFrom": "scenarios",
+          "tableTo": "applications",
+          "columnsFrom": [
+            "application_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -1298,6 +1318,13 @@
         },
         "error_message": {
           "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "app_url": {
+          "name": "app_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

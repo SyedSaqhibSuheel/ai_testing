@@ -6,6 +6,18 @@ const timestamp = (name: string) => integer(name, { mode: "timestamp" });
 const json = <T = unknown>(name: string) => text(name, { mode: "json" }).$type<T>();
 
 // ---------------------------------------------------------------------------
+// Applications
+// ---------------------------------------------------------------------------
+
+export const applications = sqliteTable("applications", {
+  id: id(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
+  updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
+});
+
+// ---------------------------------------------------------------------------
 // Requirements
 // ---------------------------------------------------------------------------
 
@@ -20,6 +32,8 @@ export type RequirementStatus =
   | "committed"
   | "failed";
 
+export type RequirementSource = "manual" | "code_analysis";
+
 export const requirements = sqliteTable("requirements", {
   id: id(),
   title: text("title").notNull(),
@@ -27,6 +41,11 @@ export const requirements = sqliteTable("requirements", {
   submittedBy: text("submitted_by").notNull(),
   status: text("status").$type<RequirementStatus>().notNull().default("submitted"),
   currentAnalysisId: text("current_analysis_id"),
+  // "manual" = human typed the requirement text. "code_analysis" = auto-generated
+  // by scanning the app's own source code (see server/agents/codeAnalysisAgent.ts);
+  // sourceModule then holds the backend controller class name it was derived from.
+  source: text("source").$type<RequirementSource>().notNull().default("manual"),
+  sourceModule: text("source_module"),
   isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
@@ -72,7 +91,14 @@ export type ScenarioStatus =
 
 export const scenarios = sqliteTable("scenarios", {
   id: id(),
-  requirementId: text("requirement_id").notNull().references(() => requirements.id),
+
+  requirementId: text("requirement_id")
+    .notNull()
+    .references(() => requirements.id, { onDelete: "cascade" }),
+
+  applicationId: text("application_id")
+    .references(() => applications.id, { onDelete: "set null" }),
+
   analysisId: text("analysis_id"),
   sourceType: text("source_type").$type<"ai_generated" | "user_added">().notNull().default("ai_generated"),
   title: text("title").notNull(),
@@ -242,7 +268,7 @@ export const testRunCases = sqliteTable("test_run_cases", {
 // Agent activity - generic log powering both live status and history
 // ---------------------------------------------------------------------------
 
-export type AgentType = "intelligence" | "planner" | "generator";
+export type AgentType = "intelligence" | "planner" | "generator" | "code_analysis";
 export type AgentRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
 export const agentRuns = sqliteTable("agent_runs", {

@@ -4,8 +4,9 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { requirements, requirementAnalyses, scenarios } from "../db/schema.js";
 import { runIntelligenceAgent } from "../agents/intelligenceAgent.js";
+import type { URLConfigService } from "../config/urlConfigService.js";
 
-export function requirementsRouter(db: Db, config: Config): Router {
+export function requirementsRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
@@ -84,7 +85,8 @@ export function requirementsRouter(db: Db, config: Config): Router {
     }
     // Fire-and-forget: analysis can take a while (real LLM call). The client
     // polls GET /:id or the agent-runs feed for progress.
-    runIntelligenceAgent(db, config, req.params.id).catch((err) => {
+    const activeAppBaseUrl = urlConfigService?.getActiveConfig().appBaseUrl;
+    runIntelligenceAgent(db, config, req.params.id, activeAppBaseUrl).catch((err) => {
       console.error(`Intelligence agent failed for requirement ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "analyzing" });

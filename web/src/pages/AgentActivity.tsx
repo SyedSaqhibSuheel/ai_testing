@@ -11,6 +11,7 @@ const AGENT_LABELS: Record<AgentType, string> = {
   intelligence: "AI Requirement / Test-Intent Agent",
   planner: "Playwright Planner",
   generator: "Playwright Generator",
+  code_analysis: "Code Analysis Agent",
 };
 
 export function AgentActivity() {
@@ -26,7 +27,7 @@ export function AgentActivity() {
       <PageHeader title="Agent Activity" subtitle="What every AI agent is doing, right now and historically" />
       <div className="px-4 py-6 sm:p-8 space-y-4">
        <div className="flex flex-wrap gap-2">
-          {(["all", "intelligence", "planner", "generator"] as const).map((t) => (
+          {(["all", "intelligence", "code_analysis", "planner", "generator"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}

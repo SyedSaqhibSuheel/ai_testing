@@ -5,7 +5,8 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { requirements, scenarios, explorationRuns, type DiscoveredTestId } from "../db/schema.js";
 import { buildContext } from "../../src/context/buildContext.js";
-import { selectRelevantContext } from "../../src/context/selectRelevantContext.js";
+import { selectRelevantContext, type RelevantContext } from "../../src/context/selectRelevantContext.js";
+import { isKnownAppUrl } from "../config/appProfile.js";
 import { getProvider } from "../../src/llm/index.js";
 import { startPlaywrightMcp } from "../../src/mcp/playwrightClient.js";
 import { exploreApp } from "./exploreApp.js";
@@ -20,6 +21,8 @@ function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   return JSON.parse(fenced ? fenced[1] : text);
 }
+
+const EMPTY_CONTEXT: RelevantContext = { controllers: [], dtos: [], components: [], routes: [] };
 
 function mergeTestIdSources(
   liveTestIds: Array<{ testId: string; component?: string }>,
@@ -62,8 +65,10 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
     db.update(scenarios).set({ status: "grounding_in_progress", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
   }
 
-  const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
-  const relevant = selectRelevantContext(requirement.rawText, context);
+  const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
+  const isKnownApp = isKnownAppUrl(targetAppUrl, config);
+  const context = isKnownApp ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
+  const relevant = context ? selectRelevantContext(requirement.rawText, context) : EMPTY_CONTEXT;
   const provider = getProvider(config);
 
   let explorationId: string | undefined;
@@ -71,7 +76,6 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
 
   try {
     updateAgentRunTask(db, runId, "Exploring application");
-    const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
     const explored = await exploreApp(
       provider,
       mcpSession,
@@ -89,7 +93,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
       return file;
     });
 
-    const staticTestIds = new Set(context.frontend.components.flatMap((c) => c.testIds));
+    const staticTestIds = context ? new Set(context.frontend.components.flatMap((c) => c.testIds)) : new Set<string>();
     const explorationRow = db
       .insert(explorationRuns)
       .values({

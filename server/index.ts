@@ -2,6 +2,7 @@ import express from "express";
 import { loadConfig } from "../src/config.js";
 import { createDb } from "./db/client.js";
 import { requirementsRouter } from "./routes/requirements.js";
+import { applicationsRouter } from "./routes/applications.js";
 import { scenariosRouter } from "./routes/scenarios.js";
 import { settingsRouter } from "./routes/settings.js";
 import { agentRunsRouter } from "./routes/agentRuns.js";
@@ -13,6 +14,7 @@ import { createUrlConfigRouter } from "./routes/urlConfig.js";
 import { URLConfigService } from "./config/urlConfigService.js";
 import { testRunsRouter, runTestRouter } from "./routes/testRuns.js";
 import { testHistoryRouter } from "./routes/testHistory.js";
+import { codeAnalysisRouter } from "./routes/codeAnalysis.js";
 import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
@@ -29,7 +31,8 @@ app.use(express.json());
 // path isn't swallowed as an :id param.
 attachSseHub(db, app);
 
-app.use("/api/requirements", requirementsRouter(db, config));
+app.use("/api/applications", applicationsRouter(db));
+app.use("/api/requirements", requirementsRouter(db, config, urlConfigService));
 app.use("/api/scenarios", scenariosRouter(db, config, urlConfigService));
 app.use("/api/settings", settingsRouter(db, config));
 app.use("/api/agent-runs", agentRunsRouter(db));
@@ -41,6 +44,7 @@ app.use("/api/git", gitRouter(db, config));
 app.use("/api/test-runs", testRunsRouter(db, config, urlConfigService));
 app.use("/api/test-history", testHistoryRouter(db, config));
 app.use("/api/dashboard", dashboardRouter(db));
+app.use("/api/code-analysis", codeAnalysisRouter(db, config));
 app.use("/api/url-config", createUrlConfigRouter(db, config));
 
 // Screenshots/traces from test runs. Mounted at the repo root (not
