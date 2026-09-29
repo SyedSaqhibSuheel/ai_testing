@@ -6,10 +6,12 @@ import type { TranscriptTurn } from "../../src/schemas/scenarioResult.js";
 import { ExplorationFindingsSchema, type ExplorationFindings } from "../schemas/exploration.js";
 import { buildExploreSystemPrompt, buildExploreUserPrompt } from "./explorePrompts.js";
 
-// Cataloguing is cheaper than executing+asserting, so a tighter budget than
-// scenario execution's 40 turns / 180s is appropriate.
+// Cataloguing is cheaper than executing+asserting, so fewer turns than
+// scenario execution's 40. The wall clock must still outlast
+// withRateLimitRetry: a single free-tier 429 can wait ~4 x 22s, which alone
+// used to exhaust a 120s budget and save an empty (routes/flows: none) run.
 const MAX_TURNS = 25;
-const WALL_CLOCK_TIMEOUT_MS = 120_000;
+const WALL_CLOCK_TIMEOUT_MS = 300_000;
 
 export interface CapturedImage {
   turn: number;
@@ -35,14 +37,15 @@ export async function exploreApp(
   requirementText: string,
   approvedScenarios: Array<{ title: string; preconditions: string[] }>,
   context: RelevantContext,
-  appBaseUrl: string
+  appBaseUrl: string,
+  login?: { username: string; password: string }
 ): Promise<ExploreAppOutput> {
   const tools = withReportExplorationTool(mcpSession.tools);
   const transcript: TranscriptTurn[] = [];
   const images: CapturedImage[] = [];
 
   const messages: ChatMessage[] = [
-    { role: "system", text: buildExploreSystemPrompt(appBaseUrl) },
+    { role: "system", text: buildExploreSystemPrompt(appBaseUrl, login) },
     { role: "user", text: buildExploreUserPrompt(requirementText, approvedScenarios, context) },
   ];
 

@@ -20,6 +20,7 @@ export function CodeAnalysis() {
   });
 
   const modules = data?.modules ?? [];
+  const added = data?.added ?? [];
   const analyzedCount = modules.filter((m) => m.requirementId && m.requirementStatus !== "failed").length;
   const running = data?.running ?? false;
 
@@ -84,6 +85,17 @@ export function CodeAnalysis() {
                 ) : (
                   <span className="shrink-0 text-xs text-muted-2">Not yet analyzed</span>
                 )}
+              </div>
+            ))}
+            {added.map((r) => (
+              <div key={r.requirementId} className="flex items-center justify-between gap-4 p-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate">{r.name}</div>
+                  <div className="text-xs text-muted mt-1 truncate">Added requirement &middot; spans multiple components</div>
+                </div>
+                <Link to={`/requirements/${r.requirementId}`} className="shrink-0">
+                  <StatusBadge status={r.requirementStatus} />
+                </Link>
               </div>
             ))}
           </Card>

@@ -3,7 +3,8 @@
  * Manages environment profiles and URL resolution with database persistence
  */
 
-import { URLManager, type EnvironmentProfile, resolveUrl } from "./urlManager.js";
+import { URLManager, type EnvironmentProfile, type URLConfig, resolveUrl } from "./urlManager.js";
+import { getSetting, setSetting } from "../settings/settingsService.js";
 
 export interface URLConfigServiceOptions {
   defaultAppBaseUrl: string;
@@ -31,6 +32,24 @@ export class URLConfigService {
       options.defaultApiBaseUrl
     );
     this.initializeDefaultProfiles();
+    this.loadPersisted();
+  }
+
+  /**
+   * Profiles added/switched from the Settings UI must survive a server
+   * restart, otherwise "active" silently reverts to the .env default on
+   * every deploy/restart - restore whatever was last saved to the settings
+   * table, if anything.
+   */
+  private loadPersisted(): void {
+    const persisted = getSetting<URLConfig | undefined>(this.db, "urlConfig", undefined);
+    if (persisted && persisted.profiles.some((p) => p.id === persisted.activeProfileId)) {
+      this.manager.setConfig(persisted);
+    }
+  }
+
+  private persist(): void {
+    setSetting(this.db, "urlConfig", this.manager.getConfig());
   }
 
   /**
@@ -90,6 +109,7 @@ export class URLConfigService {
     this.validateUrl(profile.apiBaseUrl, "apiBaseUrl");
 
     this.manager.setProfile(profile);
+    this.persist();
     return profile;
   }
 
@@ -103,6 +123,7 @@ export class URLConfigService {
     }
 
     this.manager.switchProfile(profileId);
+    this.persist();
     return this.getActiveConfig();
   }
 
@@ -111,6 +132,7 @@ export class URLConfigService {
    */
   deleteProfile(profileId: string): void {
     this.manager.deleteProfile(profileId);
+    this.persist();
   }
 
   /**

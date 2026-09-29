@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type {
   AgentRun,
+  AddedCodeRequirementSummary,
   Application,
   CodeModuleSummary,
   DashboardSummary,
@@ -130,6 +131,7 @@ getTestRun: (id: string) =>
   getDashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),
 
   // Code analysis (generate requirements/scenarios by scanning the app's own source code)
-  listCodeModules: () => request<{ modules: CodeModuleSummary[]; running: boolean }>("/code-analysis/modules"),
+  listCodeModules: () =>
+    request<{ modules: CodeModuleSummary[]; added: AddedCodeRequirementSummary[]; running: boolean }>("/code-analysis/modules"),
   runCodeAnalysis: (force?: boolean) => request<{ status: string }>("/code-analysis/run", { method: "POST", body: JSON.stringify({ force }) }),
 };
