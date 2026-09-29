@@ -113,12 +113,28 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
           ← Back to applications
         </Link>
 
-        <div>
-          <h2 className="text-lg font-semibold">Test Cases</h2>
-          <p className="text-sm text-muted mt-1">
-            Test cases assigned to {application.name}.
-          </p>
-        </div>
+      <div className="flex items-start justify-between gap-4">
+  <div>
+    <h2 className="text-lg font-semibold">Test Cases</h2>
+    <p className="text-sm text-muted mt-1">
+      Test cases assigned to {application.name}.
+    </p>
+  </div>
+
+  <button
+    type="button"
+    onClick={async () => {
+      try {
+        await api.runAllTests();
+      } catch (error) {
+        console.error("Failed to run all tests:", error);
+      }
+    }}
+    className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+  >
+    Save & Run All
+  </button>
+</div>
 
         {scenariosLoading && (
           <Card className="p-6 text-center">
@@ -292,14 +308,10 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
       setRunningTestFileId(selectedRunDetails.run.testFileId);
 
       try {
-  await api.runTestFile(selectedRunDetails.run.testFileId);
-
-  await queryClient.invalidateQueries({
-    queryKey: ["test-runs", "application", id],
-  });
-} finally {
-  setRunningTestFileId(null);
-}
+        await api.runTestFile(selectedRunDetails.run.testFileId);
+      } finally {
+        setRunningTestFileId(null);
+      }
     }}
     disabled={runningTestFileId === selectedRunDetails?.run.testFileId}
     className="text-sm text-accent hover:underline disabled:opacity-50"

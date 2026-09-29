@@ -82,6 +82,17 @@ listApplications: () =>
   regenerateTestFile: (id: string) => request<TestFile>(`/test-files/${id}/regenerate`, { method: "POST" }),
   runTestFile: (id: string) => request(`/test-files/${id}/run`, { method: "POST" }),
 
+  runAllTests: () =>
+  request<{
+    status: string;
+    testFileCount: number;
+    runIds: string[];
+   }>("/test-files/run-all", {
+    method: "POST",
+  }),
+
+
+
   // Test runs (CI/CD: real `npx playwright test` execution + report)
   listTestRuns: (params?: { testFileId?: string; applicationId?: string }) => {
   const qs = new URLSearchParams(

@@ -147,5 +147,59 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
     res.status(202).json({ status: "running" });
   });
 
+  router.post("/run-all", async (_req, res) => {
+  try {
+    const files = db
+      .select()
+      .from(testFiles)
+      .where(eq(testFiles.isLatest, true))
+      .all()
+      .filter((file) => file.status === "committed");
+
+    if (files.length === 0) {
+      res.status(400).json({
+        error: "No committed test files are available to run.",
+      });
+      return;
+    }
+
+    const settings = getPlatformSettings(db, config);
+    const activeUrlConfig = urlConfigService
+      ? urlConfigService.getActiveConfig()
+      : { appBaseUrl: config.appBaseUrl };
+
+    const targetAppUrl =
+      settings.testAppUrl || activeUrlConfig.appBaseUrl;
+
+    const runIds: string[] = [];
+
+    for (const file of files) {
+      const runId = await runPlaywrightTest(
+        db,
+        config,
+        file.id,
+        "manual",
+        targetAppUrl
+      );
+
+      runIds.push(runId);
+    }
+
+    res.status(202).json({
+      status: "running",
+      testFileCount: files.length,
+      runIds,
+    });
+  } catch (error) {
+    console.error("Run all tests failed:", error);
+
+    res.status(500).json({
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to run all tests",
+    });
+  }
+});
   return router;
 }
