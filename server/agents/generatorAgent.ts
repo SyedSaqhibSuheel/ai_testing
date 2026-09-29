@@ -90,9 +90,10 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
           }
         : undefined;
 
-    // Get the configured test app URL from database, fallback to .env
+    // Prefer the caller's active URL-config profile (Settings > Environment
+    // configuration) over the legacy single testAppUrl setting, then .env.
     const settings = getPlatformSettings(db, config);
-    const testAppUrl = settings.testAppUrl || config.appBaseUrl;
+    const testAppUrl = activeAppBaseUrl || settings.testAppUrl || config.appBaseUrl;
 
     const provider = getProvider(config);
     const chatResult = await provider.chat(

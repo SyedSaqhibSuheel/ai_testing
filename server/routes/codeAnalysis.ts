@@ -1,14 +1,14 @@
 import { Router } from "express";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { listCodeModules, isCodeAnalysisBatchRunning, runCodeAnalysisBatch } from "../agents/codeAnalysisAgent.js";
+import { listCodeModules, listAddedCodeRequirements, isCodeAnalysisBatchRunning, runCodeAnalysisBatch } from "../agents/codeAnalysisAgent.js";
 
 export function codeAnalysisRouter(db: Db, config: Config): Router {
   const router = Router();
 
   router.get("/modules", (req, res) => {
     const modules = listCodeModules(db, config);
-    res.json({ modules, running: isCodeAnalysisBatchRunning() });
+    res.json({ modules, added: listAddedCodeRequirements(db, config), running: isCodeAnalysisBatchRunning() });
   });
 
   router.post("/run", (req, res) => {

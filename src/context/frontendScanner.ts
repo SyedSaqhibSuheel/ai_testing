@@ -17,6 +17,21 @@ function jsxAttrText(attr: ts.JsxAttribute): string | undefined {
   return undefined;
 }
 
+// data-testid specifically needs its own extraction: a template literal like
+// `button-request-${request.id}` must NOT be reported as that raw source
+// text (backticks and all) - the generator prompt tells the LLM to use
+// confirmed testids "verbatim", so handing it un-evaluable JS source there
+// just makes it hallucinate a plausible-looking fake id (e.g. "req-123")
+// instead. Normalize to "<static-head>*" so callers can recognize it as a
+// dynamic-prefix pattern and build a `[data-testid^="..."]` locator instead.
+function testIdAttrText(attr: ts.JsxAttribute): string | undefined {
+  const init = attr.initializer;
+  if (init && ts.isJsxExpression(init) && init.expression && ts.isTemplateExpression(init.expression)) {
+    return `${init.expression.head.text}*`;
+  }
+  return jsxAttrText(attr);
+}
+
 function findComponentName(sourceFile: ts.SourceFile): string | undefined {
   let name: string | undefined;
   const visit = (node: ts.Node) => {
@@ -57,7 +72,7 @@ function scanFile(file: string): { testIds: ComponentTestIds; routes: RouteInfo[
 
   const visit = (node: ts.Node) => {
     if (ts.isJsxAttribute(node) && node.name.getText() === "data-testid") {
-      const value = jsxAttrText(node);
+      const value = testIdAttrText(node);
       if (value) testIds.add(value);
     }
 

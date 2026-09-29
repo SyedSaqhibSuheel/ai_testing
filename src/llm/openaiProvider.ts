@@ -68,7 +68,11 @@ export function createOpenAiProvider(
   model: string,
   options: OpenAiCompatibleOptions = {}
 ): LlmProvider {
-  const client = new OpenAI({ apiKey, baseURL: options.baseURL });
+  // The SDK's default 10-minute request timeout let one stalled Gemini call
+  // freeze an agent loop for minutes (the Planner's exploration then hit its
+  // wall clock and saved empty routes/flows). Normal calls finish in seconds;
+  // a timed-out call is retried by the SDK itself.
+  const client = new OpenAI({ apiKey, baseURL: options.baseURL, timeout: 90_000 });
 
   return {
     name: options.providerName ?? "openai",

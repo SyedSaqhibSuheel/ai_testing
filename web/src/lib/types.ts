@@ -42,6 +42,13 @@ export interface CodeModuleSummary {
   requirementStatus: RequirementStatus | null;
 }
 
+/** A code_analysis requirement spanning several components (no single scanned module). */
+export interface AddedCodeRequirementSummary {
+  name: string;
+  requirementId: string;
+  requirementStatus: RequirementStatus;
+}
+
 export interface RequirementAnalysis {
   id: string;
   requirementId: string;

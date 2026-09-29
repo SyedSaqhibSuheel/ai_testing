@@ -92,6 +92,33 @@ export function listCodeModules(db: Db, config: Config): CodeModuleSummary[] {
   });
 }
 
+export interface AddedCodeRequirementSummary {
+  name: string;
+  requirementId: string;
+  requirementStatus: RequirementStatus;
+}
+
+/**
+ * code_analysis requirements added by hand for behaviour that spans several
+ * components (e.g. Theme: ThemeToggle + ThemeProvider + Header), so they have
+ * no single scanned module to hang off. Kept separate from listCodeModules so
+ * they never re-point an existing module row or skew its analyzed counts.
+ */
+export function listAddedCodeRequirements(db: Db, config: Config): AddedCodeRequirementSummary[] {
+  const moduleNames = new Set(listFrontendModules(config).map((m) => m.componentName));
+  const latestByName = new Map<string, AddedCodeRequirementSummary>();
+  const rows = db
+    .select()
+    .from(requirements)
+    .where(and(eq(requirements.source, "code_analysis"), eq(requirements.isDeleted, false)))
+    .all();
+  for (const r of rows) {
+    if (!r.sourceModule || moduleNames.has(r.sourceModule)) continue;
+    latestByName.set(r.sourceModule, { name: r.sourceModule, requirementId: r.id, requirementStatus: r.status });
+  }
+  return [...latestByName.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 async function callCodeAnalysisLlm(config: Config, module: FrontendModule, source: string, backendContext: RelevantContext): Promise<IntelligenceAnalysis> {
   const provider = getProvider(config);
   const system = buildCodeAnalysisSystemPrompt();
