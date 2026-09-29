@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { desc } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { gitCommits } from "../db/schema.js";
+import { gitCommits, testFiles } from "../db/schema.js";
 import { getRepoStatus, getCommitHistory, commitApprovedTestFiles } from "../git/managedRepo.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
 import { getPlatformSettings } from "../settings/settingsService.js";
@@ -75,7 +75,14 @@ export function gitRouter(db: Db, config: Config): Router {
       // silently falling all the way back to config.appBaseUrl (.env,
       // typically the platform's own localhost address).
       const { testAppUrl } = getPlatformSettings(db, config);
+      const autoRunRows = db
+        .select({ id: testFiles.id, autoRunOnCommit: testFiles.autoRunOnCommit })
+        .from(testFiles)
+        .where(inArray(testFiles.id, testFileIds))
+        .all();
+      const autoRunIds = new Set(autoRunRows.filter((r) => r.autoRunOnCommit).map((r) => r.id));
       for (const id of testFileIds) {
+        if (!autoRunIds.has(id)) continue;
         runPlaywrightTest(db, config, id, "auto_after_commit", testAppUrl).catch((err) => {
           console.error(`Auto test run failed for test file ${id}:`, err);
         });

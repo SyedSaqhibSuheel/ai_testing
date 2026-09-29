@@ -82,7 +82,12 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
       requirement.rawText,
       approvedScenarios.map((s) => ({ title: s.title, preconditions: s.preconditions as string[] })),
       relevant,
-      targetAppUrl
+      targetAppUrl,
+      // CallCenterUI's own login credentials only apply when the active target
+      // IS CallCenterUI - a different site's login has nothing to do with them.
+      isKnownApp && config.appLoginUsername && config.appLoginPassword
+        ? { username: config.appLoginUsername, password: config.appLoginPassword }
+        : undefined
     );
 
     const screenshotDir = path.join(config.rootDir, "data", "explorations", runId);

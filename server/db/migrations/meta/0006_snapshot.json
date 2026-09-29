@@ -1,8 +1,8 @@
 {
-  "id": "2b34c978-f00d-4512-aa51-bca385285a9f",
-  "prevId": "148371ce-6cde-4bd8-a34a-8c15e2172ef8",
   "version": "6",
   "dialect": "sqlite",
+  "id": "1211609e-439c-4354-948a-25adbbda34e2",
+  "prevId": "148371ce-6cde-4bd8-a34a-8c15e2172ef8",
   "tables": {
     "agent_runs": {
       "name": "agent_runs",
@@ -107,15 +107,15 @@
         "agent_runs_requirement_id_requirements_id_fk": {
           "name": "agent_runs_requirement_id_requirements_id_fk",
           "tableFrom": "agent_runs",
+          "tableTo": "requirements",
           "columnsFrom": [
             "requirement_id"
           ],
-          "tableTo": "requirements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -354,15 +354,15 @@
         "exploration_runs_requirement_id_requirements_id_fk": {
           "name": "exploration_runs_requirement_id_requirements_id_fk",
           "tableFrom": "exploration_runs",
+          "tableTo": "requirements",
           "columnsFrom": [
             "requirement_id"
           ],
-          "tableTo": "requirements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -406,28 +406,28 @@
         "git_commit_files_commit_id_git_commits_id_fk": {
           "name": "git_commit_files_commit_id_git_commits_id_fk",
           "tableFrom": "git_commit_files",
+          "tableTo": "git_commits",
           "columnsFrom": [
             "commit_id"
           ],
-          "tableTo": "git_commits",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "git_commit_files_test_file_id_test_files_id_fk": {
           "name": "git_commit_files_test_file_id_test_files_id_fk",
           "tableFrom": "git_commit_files",
+          "tableTo": "test_files",
           "columnsFrom": [
             "test_file_id"
           ],
-          "tableTo": "test_files",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -581,15 +581,15 @@
         "requirement_analyses_requirement_id_requirements_id_fk": {
           "name": "requirement_analyses_requirement_id_requirements_id_fk",
           "tableFrom": "requirement_analyses",
+          "tableTo": "requirements",
           "columnsFrom": [
             "requirement_id"
           ],
-          "tableTo": "requirements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -849,28 +849,28 @@
         "scenarios_requirement_id_requirements_id_fk": {
           "name": "scenarios_requirement_id_requirements_id_fk",
           "tableFrom": "scenarios",
+          "tableTo": "requirements",
           "columnsFrom": [
             "requirement_id"
           ],
-          "tableTo": "requirements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         },
         "scenarios_application_id_applications_id_fk": {
           "name": "scenarios_application_id_applications_id_fk",
           "tableFrom": "scenarios",
+          "tableTo": "applications",
           "columnsFrom": [
             "application_id"
           ],
-          "tableTo": "applications",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "set null"
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -952,28 +952,28 @@
         "test_file_scenarios_test_file_id_test_files_id_fk": {
           "name": "test_file_scenarios_test_file_id_test_files_id_fk",
           "tableFrom": "test_file_scenarios",
+          "tableTo": "test_files",
           "columnsFrom": [
             "test_file_id"
           ],
-          "tableTo": "test_files",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "test_file_scenarios_scenario_id_scenarios_id_fk": {
           "name": "test_file_scenarios_scenario_id_scenarios_id_fk",
           "tableFrom": "test_file_scenarios",
+          "tableTo": "scenarios",
           "columnsFrom": [
             "scenario_id"
           ],
-          "tableTo": "scenarios",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1049,6 +1049,14 @@
           "autoincrement": false,
           "default": true
         },
+        "auto_run_on_commit": {
+          "name": "auto_run_on_commit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -1076,15 +1084,15 @@
         "test_files_requirement_id_requirements_id_fk": {
           "name": "test_files_requirement_id_requirements_id_fk",
           "tableFrom": "test_files",
+          "tableTo": "requirements",
           "columnsFrom": [
             "requirement_id"
           ],
-          "tableTo": "requirements",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1228,15 +1236,15 @@
         "test_run_cases_test_run_id_test_runs_id_fk": {
           "name": "test_run_cases_test_run_id_test_runs_id_fk",
           "tableFrom": "test_run_cases",
+          "tableTo": "test_runs",
           "columnsFrom": [
             "test_run_id"
           ],
-          "tableTo": "test_runs",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1351,15 +1359,15 @@
         "test_runs_test_file_id_test_files_id_fk": {
           "name": "test_runs_test_file_id_test_files_id_fk",
           "tableFrom": "test_runs",
+          "tableTo": "test_files",
           "columnsFrom": [
             "test_file_id"
           ],
-          "tableTo": "test_files",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1370,9 +1378,9 @@
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

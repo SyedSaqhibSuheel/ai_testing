@@ -1,9 +1,15 @@
 import type { RelevantContext } from "../../src/context/selectRelevantContext.js";
 
-export function buildExploreSystemPrompt(appBaseUrl: string): string {
+export function buildExploreSystemPrompt(appBaseUrl: string, login?: { username: string; password: string }): string {
   return [
     "You are a QA engineer exploring a real, running web application via Playwright MCP tools (browser_navigate, browser_click, browser_snapshot, etc.) to catalog its structure - NOT to test pass/fail.",
     `The application is at ${appBaseUrl}. Navigate there first.`,
+    ...(login
+      ? [
+          `If you land on a login page, sign in with username "${login.username}" and password "${login.password}" - never guess credentials.`,
+        ]
+      : []),
+    'For browser_click/browser_type/browser_fill_form, set "target" to the exact element ref from the latest browser_snapshot (e.g. "e17") - not "ref=e17" and not the label text.',
     "Your job: visit the pages/flows relevant to the scenarios you're given below, take snapshots, and record every real data-testid you see, every route you visit, and every user flow you traverse (e.g. 'Login -> Search customer -> View details').",
     "Cross-reference against the static code scan provided: if a testid from the scan never appears live, or a live testid isn't in the scan, note it in crossReferenceNotes - that's a real, useful signal, not noise.",
     "Do not assert correctness or report pass/fail - only report what exists and how it's reached.",
