@@ -49,6 +49,29 @@ export interface AddedCodeRequirementSummary {
   requirementStatus: RequirementStatus;
 }
 
+/** A cross-cutting behaviour (Theme, Action Buttons, Status, Navigation) derived from several source files. */
+export interface CodeFeatureSummary {
+  name: string;
+  title: string;
+  files: string[];
+  requirementId: string | null;
+  requirementStatus: RequirementStatus | null;
+}
+
+export type PipelineStage = "approving" | "planning" | "generating" | "committing" | "running" | "done" | "failed";
+
+/** One-click approve → plan → generate → commit → run chain for a requirement (server/agents/requirementPipeline.ts). */
+export interface PipelineState {
+  requirementId: string;
+  stage: PipelineStage;
+  message: string;
+  error?: string;
+  testFileId?: string;
+  testRunId?: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
 export interface RequirementAnalysis {
   id: string;
   requirementId: string;

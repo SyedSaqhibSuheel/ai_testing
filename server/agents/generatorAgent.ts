@@ -1,3 +1,4 @@
+import path from "node:path";
 import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
@@ -8,7 +9,7 @@ import { isKnownAppUrl } from "../config/appProfile.js";
 import { getProvider } from "../../src/llm/index.js";
 import { GeneratedTestFileSchema } from "../schemas/generatedTest.js";
 import { buildGeneratorSystemPrompt, buildGeneratorUserPrompt } from "./generatorPrompts.js";
-import { validateGeneratedTest } from "./validateTestSyntax.js";
+import { validateGeneratedTest, isConfirmedTestId } from "./validateTestSyntax.js";
 import { getLatestExplorationRun } from "./plannerAgent.js";
 import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } from "./agentRunTracking.js";
 import { getPlatformSettings } from "../settings/settingsService.js";
@@ -68,14 +69,47 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
     const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
     const context = isKnownApp ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
     const exploration = getLatestExplorationRun(db, requirementId);
-    const confirmedTestIds = new Set<string>([
-      ...(context ? context.frontend.components.flatMap((c) => c.testIds) : []),
-      ...((exploration?.discoveredTestIds as Array<{ testId: string }> | undefined)?.map((t) => t.testId) ?? []),
-    ]);
+    const staticTestIds = new Set<string>(context ? context.frontend.components.flatMap((c) => c.testIds) : []);
+    // The explorer is an LLM self-reporting what it saw, and it does invent
+    // plausible ids (e.g. "input-username" on a login form with no testids).
+    // When the real source is available, a live-only id is kept only if the
+    // source actually renders it (exactly or as a dynamic-pattern instance).
+    const exploredTestIds = ((exploration?.discoveredTestIds as Array<{ testId: string; source?: string }> | undefined) ?? [])
+      .filter((t) => !context || t.source !== "live" || isConfirmedTestId(t.testId, staticTestIds))
+      .map((t) => t.testId);
+    const confirmedTestIds = new Set<string>([...staticTestIds, ...exploredTestIds]);
     const confirmedRoutes = new Set<string>([
       ...(context ? context.frontend.routes.map((r) => r.path) : []),
       ...((exploration?.discoveredRoutes as string[] | undefined) ?? []),
     ]);
+    // Which screen/component renders each testid, so the Generator knows e.g.
+    // that a details-panel id only exists after the list item that opens the
+    // panel has been selected - not just that the id exists somewhere.
+    const testIdComponents = new Map<string, Set<string>>();
+    const addComponent = (testId: string, component: string | undefined) => {
+      if (!component) return;
+      if (!testIdComponents.has(testId)) testIdComponents.set(testId, new Set());
+      testIdComponents.get(testId)!.add(component);
+    };
+    for (const c of context?.frontend.components ?? []) {
+      for (const t of c.testIds) addComponent(t, c.componentName ?? path.basename(c.file, path.extname(c.file)));
+    }
+    for (const t of (exploration?.discoveredTestIds as Array<{ testId: string; component?: string }> | undefined) ?? []) {
+      if (confirmedTestIds.has(t.testId)) addComponent(t.testId, t.component);
+    }
+
+    // Plans grounded before invented ids were filtered out may still name
+    // them, and the model follows the plan over any prompt rule. Strip them
+    // here so the model never sees an unconfirmed testid as an instruction.
+    const planScenarios = groundedScenarios.map((s) => ({
+      ...s,
+      steps: s.steps.map((step) => {
+        if (!step.targetTestId || isConfirmedTestId(step.targetTestId, confirmedTestIds)) return step;
+        const { targetTestId, ...rest } = step;
+        const note = `No data-testid exists for this element (the plan's "${targetTestId}" is not in the app). If it is a login field or the sign-in button, use the LOGIN LOCATORS; otherwise locate it with getByRole/getByText by its visible label.`;
+        return { ...rest, notes: rest.notes ? `${rest.notes} ${note}` : note };
+      }),
+    }));
 
     // CallCenterUI's own login credentials only apply when the active target
     // IS CallCenterUI - a different site's login has nothing to do with them.
@@ -99,7 +133,10 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
     const chatResult = await provider.chat(
       [
         { role: "system", text: buildGeneratorSystemPrompt() },
-        { role: "user", text: buildGeneratorUserPrompt(requirement.title, groundedScenarios, [...confirmedTestIds], [...confirmedRoutes], login, testAppUrl) },
+        {
+          role: "user",
+          text: buildGeneratorUserPrompt(requirement.title, planScenarios, [...confirmedTestIds], [...confirmedRoutes], login, testAppUrl, testIdComponents),
+        },
       ],
       []
     );

@@ -13,6 +13,7 @@ export function buildGroundSystemPrompt(): string {
     "- expectedBackendCalls must use exact method+path pairs from the static scan.",
     "- passCriteria must be concrete and checkable, traceable back to the scenario's own expectedResult - do not invent business rules.",
     "- If a scenario truly cannot be grounded (no matching page/testids found), still produce a plan but note the gap in a step's `notes` field.",
+    "- Login steps: NEVER make up credentials (no 'testagent', 'password123', 'admin', etc.). If a LOGIN section is given below, use its exact username/password as the inputValue of the username/password steps. If LOGIN LOCATORS are given, the login form has no data-testids - leave targetTestId empty on those steps and put the exact locator expression in `notes`. If no login is configured, leave inputValue empty and note 'login credentials not configured'.",
     "",
     "Output ONLY a single JSON object: { \"plans\": [ <one grounded plan per input scenario, same shape as below> ] } - no markdown fences, no commentary.",
     JSON.stringify(
@@ -42,8 +43,22 @@ export function buildGroundUserPrompt(
   requirementText: string,
   scenarios: Array<{ id: string; title: string; description: string; preconditions: string[]; draftSteps: string[]; expectedResult: string }>,
   findings: ExplorationFindings,
-  context: RelevantContext
+  context: RelevantContext,
+  login?: { username: string; password: string; usernameLocator?: string; passwordLocator?: string; submitLocator?: string }
 ): string {
+  const loginSection = !login
+    ? "## Login\nNo login credentials configured."
+    : [
+        "## Login",
+        `Username: "${login.username}"`,
+        `Password: "${login.password}"`,
+        login.usernameLocator && login.passwordLocator && login.submitLocator
+          ? `## LOGIN LOCATORS (login form has no data-testids)\nUsername field: ${login.usernameLocator}\nPassword field: ${login.passwordLocator}\nSubmit action: ${login.submitLocator}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
   return [
     `REQUIREMENT: ${requirementText}`,
     "",
@@ -63,5 +78,7 @@ export function buildGroundUserPrompt(
     context.components.map((c) => `- ${c.componentName ?? c.file}: [${c.testIds.join(", ")}]`).join("\n") || "(none)",
     "Backend endpoints:",
     context.controllers.flatMap((c) => c.endpoints.map((e) => `- ${e.httpMethod} ${e.path}`)).join("\n") || "(none)",
+    "",
+    loginSection,
   ].join("\n");
 }

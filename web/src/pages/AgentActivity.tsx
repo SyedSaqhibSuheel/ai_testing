@@ -45,7 +45,7 @@ export function AgentActivity() {
             <div key={run.id} className="p-4">
               <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
   <div className="min-w-0 break-words text-sm font-medium">
-    {AGENT_LABELS[run.agentType]}
+    {AGENT_LABELS[run.agentType] ?? run.agentType}
   </div>
   <StatusBadge status={run.status} />
 </div>

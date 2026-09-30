@@ -52,6 +52,19 @@ function buildDynamicTestIdPatterns(confirmedTestIds: Set<string>): RegExp[] {
 }
 
 /**
+ * Whether a concrete testid is known to exist: an exact match, a concrete
+ * instance of a backtick template, or a match for a `prefix*` dynamic entry.
+ */
+export function isConfirmedTestId(testId: string, confirmedTestIds: Set<string>): boolean {
+  if (confirmedTestIds.has(testId)) return true;
+  if (buildDynamicTestIdPatterns(confirmedTestIds).some((p) => p.test(testId))) return true;
+  for (const t of confirmedTestIds) {
+    if (t.endsWith("*") && (testId === t || testId.startsWith(t.slice(0, -1)))) return true;
+  }
+  return false;
+}
+
+/**
  * Extension of `src/planner/validatePlan.ts`'s philosophy - never trust the
  * model with locator references, even in free-form generated code text.
  * Walks the AST for every `getByTestId("...")` call and flags any literal
@@ -60,7 +73,6 @@ function buildDynamicTestIdPatterns(confirmedTestIds: Set<string>): RegExp[] {
  */
 export function checkLocatorHallucination(code: string, confirmedTestIds: Set<string>): ValidationResult {
   const sourceFile = ts.createSourceFile("generated.spec.ts", code, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
-  const dynamicPatterns = buildDynamicTestIdPatterns(confirmedTestIds);
   const invalid: string[] = [];
 
   const visit = (node: ts.Node) => {
@@ -70,12 +82,7 @@ export function checkLocatorHallucination(code: string, confirmedTestIds: Set<st
       node.expression.name.text === "getByTestId"
     ) {
       const arg = node.arguments[0];
-      if (
-        arg &&
-        ts.isStringLiteralLike(arg) &&
-        !confirmedTestIds.has(arg.text) &&
-        !dynamicPatterns.some((p) => p.test(arg.text))
-      ) {
+      if (arg && ts.isStringLiteralLike(arg) && !isConfirmedTestId(arg.text, confirmedTestIds)) {
         invalid.push(arg.text);
       }
     }

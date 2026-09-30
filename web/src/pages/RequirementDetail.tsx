@@ -22,7 +22,7 @@ function Section({ title, children, actions }: { title: string; children: React.
   );
 }
 
-function ScenarioCard({ scenario, requirementId }: { scenario: Scenario; requirementId: string }) {
+export function ScenarioCard({ scenario, requirementId }: { scenario: Scenario; requirementId: string }) {
   const queryClient = useQueryClient();
   const [rejectOpen, setRejectOpen] = useState(false);
   const [regenOpen, setRegenOpen] = useState(false);
@@ -163,7 +163,7 @@ function ScenarioCard({ scenario, requirementId }: { scenario: Scenario; require
   );
 }
 
-function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boolean }) {
+export function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boolean }) {
   const queryClient = useQueryClient();
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
 
@@ -245,7 +245,7 @@ function TestRunsPanel({ fileId, committed }: { fileId: string; committed: boole
   );
 }
 
-function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: string }) {
+export function TestFileCard({ file, requirementId }: { file: TestFile; requirementId: string }) {
   const queryClient = useQueryClient();
   const [rejectOpen, setRejectOpen] = useState(false);
   const [commitOpen, setCommitOpen] = useState(false);

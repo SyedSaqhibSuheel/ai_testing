@@ -3,11 +3,13 @@ import type {
   AgentRun,
   AddedCodeRequirementSummary,
   Application,
+  CodeFeatureSummary,
   CodeModuleSummary,
   DashboardSummary,
   ExplorationRun,
   GitCommitRecord,
   MaskedSettings,
+  PipelineState,
   Requirement,
   RequirementAnalysis,
   Scenario,
@@ -134,4 +136,14 @@ getTestRun: (id: string) =>
   listCodeModules: () =>
     request<{ modules: CodeModuleSummary[]; added: AddedCodeRequirementSummary[]; running: boolean }>("/code-analysis/modules"),
   runCodeAnalysis: (force?: boolean) => request<{ status: string }>("/code-analysis/run", { method: "POST", body: JSON.stringify({ force }) }),
+  // Cross-cutting behaviours (Theme, Action Buttons, Status, Navigation) derived from the source
+  listCodeFeatures: () => request<{ features: CodeFeatureSummary[]; running: boolean }>("/code-analysis/features"),
+  runCodeFeatures: (force?: boolean) => request<{ status: string }>("/code-analysis/features/run", { method: "POST", body: JSON.stringify({ force }) }),
+  // One click: approve scenarios → Planner → generate → commit → run, resuming from wherever the requirement is
+  getPipeline: (requirementId: string) => request<PipelineState | null>(`/code-analysis/pipeline/${requirementId}`),
+  runPipeline: (requirementId: string, scenarioIds: string[]) =>
+    request<PipelineState>(`/code-analysis/pipeline/${requirementId}`, {
+      method: "POST",
+      body: JSON.stringify({ scenarioIds, actor: currentActor() }),
+    }),
 };
