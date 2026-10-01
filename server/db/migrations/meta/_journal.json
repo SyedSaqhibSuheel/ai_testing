@@ -45,18 +45,25 @@
       "breakpoints": true
     },
     {
-  "idx": 6,
-  "version": "6",
-  "when": 1790100000000,
-  "tag": "0006_add_auto_run_on_commit",
-  "breakpoints": true
-},
-{
-  "idx": 7,
-  "version": "7",
-  "when": 1790579695656,
-  "tag": "0007_repair_test_runs_app_url",
-  "breakpoints": true
-}
+      "idx": 6,
+      "version": "6",
+      "when": 1790100000000,
+      "tag": "0006_add_auto_run_on_commit",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790579695656,
+      "tag": "0007_repair_test_runs_app_url",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1790846931180,
+      "tag": "0008_parched_stepford_cuckoos",
+      "breakpoints": true
+    }
   ]
 }

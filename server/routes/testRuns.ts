@@ -171,24 +171,21 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
     const targetAppUrl =
       settings.testAppUrl || activeUrlConfig.appBaseUrl;
 
-    const runIds: string[] = [];
-
+    // Fire-and-forget, matching every other agent/test trigger in this app
+    // (see the single-file /:id/run route above) - each run is a real
+    // Playwright process that can take anywhere from seconds to a minute+,
+    // so awaiting all of them here before responding would leave the
+    // request hanging for however long the slowest of N files takes. The
+    // client polls GET /api/test-runs?testFileId=... per file for results.
     for (const file of files) {
-      const runId = await runPlaywrightTest(
-        db,
-        config,
-        file.id,
-        "manual",
-        targetAppUrl
-      );
-
-      runIds.push(runId);
+      runPlaywrightTest(db, config, file.id, "manual", targetAppUrl).catch((err) => {
+        console.error(`Run-all: test run failed for test file ${file.id}:`, err);
+      });
     }
 
     res.status(202).json({
       status: "running",
       testFileCount: files.length,
-      runIds,
     });
   } catch (error) {
     console.error("Run all tests failed:", error);

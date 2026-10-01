@@ -27,6 +27,14 @@ export const ScenarioSchema = z.object({
     .default([]),
   expectedUiOutcomes: z.array(z.string()).default([]),
   passCriteria: z.array(z.string()).min(1),
+  // false when live exploration found no UI-reachable path to this
+  // scenario's precondition (e.g. a state only a backend/websocket push can
+  // cause, like a customer's own mobile app approving/denying) - the
+  // Generator writes a test.skip(reason) instead of steps that would always
+  // fail. true/absent means grounding found (or assumed, if ungrounded) a
+  // real path and `steps` should be followed normally.
+  groundable: z.boolean().default(true),
+  ungroundableReason: z.string().optional(),
 });
 export type Scenario = z.infer<typeof ScenarioSchema>;
 

@@ -129,6 +129,13 @@ export interface DiscoveredTestId {
   source: "static" | "live" | "both";
 }
 
+export interface ScenarioPath {
+  scenarioTitle: string;
+  reachable: boolean;
+  steps: Array<{ action: string; testId?: string; route?: string; inputValue?: string }>;
+  unreachableReason?: string;
+}
+
 export const explorationRuns = sqliteTable("exploration_runs", {
   id: id(),
   requirementId: text("requirement_id").notNull().references(() => requirements.id),
@@ -137,6 +144,7 @@ export const explorationRuns = sqliteTable("exploration_runs", {
   discoveredTestIds: json<DiscoveredTestId[]>("discovered_test_ids").notNull().default([]),
   discoveredFlows: json<string[]>("discovered_flows").notNull().default([]),
   crossReferenceNotes: json<string[]>("cross_reference_notes").notNull().default([]),
+  scenarioPaths: json<ScenarioPath[]>("scenario_paths").notNull().default([]),
   screenshotPaths: json<string[]>("screenshot_paths").notNull().default([]),
   rawTranscript: json("raw_transcript"),
   status: text("status").$type<"running" | "completed" | "failed" | "timeout">().notNull().default("running"),

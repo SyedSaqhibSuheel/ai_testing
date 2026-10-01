@@ -95,8 +95,36 @@ export const reportExplorationTool: ToolDef = {
         items: { type: "string" },
         description: "Discrepancies noticed vs. the static code scan provided in context - e.g. a testid in the scan never reached live, or a route requiring auth you couldn't access.",
       },
+      scenarioPaths: {
+        type: "array",
+        description:
+          "One entry per scenario you were given. For each, the exact sequence of real UI actions you personally performed (clicks/fills/navigations, by exact testid) that actually reached its precondition and confirmed it live - or, if you tried and found no such path exists (e.g. the state can only be caused by a backend/websocket event, not a click), reachable:false with why.",
+        items: {
+          type: "object",
+          properties: {
+            scenarioTitle: { type: "string", description: "Exact title of the scenario this path is for, copied verbatim." },
+            reachable: { type: "boolean" },
+            steps: {
+              type: "array",
+              description: "Only when reachable:true - the literal steps you took, in order, ending right before the assertion.",
+              items: {
+                type: "object",
+                properties: {
+                  action: { type: "string" },
+                  testId: { type: "string" },
+                  route: { type: "string" },
+                  inputValue: { type: "string" },
+                },
+                required: ["action"],
+              },
+            },
+            unreachableReason: { type: "string", description: "Only when reachable:false - what you tried and why no UI path exists." },
+          },
+          required: ["scenarioTitle", "reachable"],
+        },
+      },
     },
-    required: ["summary", "discoveredRoutes", "discoveredTestIds", "discoveredFlows"],
+    required: ["summary", "discoveredRoutes", "discoveredTestIds", "discoveredFlows", "scenarioPaths"],
   },
 };
 

@@ -1,0 +1,1 @@
+ALTER TABLE `exploration_runs` ADD `scenario_paths` text DEFAULT '[]' NOT NULL;

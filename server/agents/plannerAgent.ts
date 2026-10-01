@@ -123,6 +123,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
         discoveredTestIds: mergeTestIdSources(explored.findings.discoveredTestIds, staticTestIds),
         discoveredFlows: explored.findings.discoveredFlows,
         crossReferenceNotes: explored.findings.crossReferenceNotes,
+        scenarioPaths: explored.findings.scenarioPaths,
         screenshotPaths,
         rawTranscript: explored.transcript,
         status: explored.status === "timeout" ? "timeout" : "completed",
