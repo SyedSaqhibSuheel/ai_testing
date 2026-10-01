@@ -61,7 +61,7 @@ const ConfigSchema = z.object({
   cacheDir: z.string(),
   // AI Testing Platform (server/ + web/)
   serverPort: z.number().int().positive(),
-  dbPath: z.string(),
+  databaseUrl: z.string(),
   managedRepoDir: z.string(),
   managedRepoBranch: z.string(),
 });
@@ -100,7 +100,7 @@ export function loadConfig(): Config {
     runsDir: path.join(ROOT_DIR, "runs"),
     cacheDir: path.join(ROOT_DIR, ".cache"),
     serverPort: Number(env.SERVER_PORT ?? "4701"),
-    dbPath: path.resolve(ROOT_DIR, env.DB_PATH ?? "data/platform.db"),
+    databaseUrl: env.DATABASE_URL ?? "postgresql://ai_testing:ai_testing_dev_password@localhost:5433/ai_testing",
     managedRepoDir: path.resolve(ROOT_DIR, env.MANAGED_REPO_DIR ?? "../generated-tests-repo"),
     managedRepoBranch: env.MANAGED_REPO_BRANCH ?? "main",
   };

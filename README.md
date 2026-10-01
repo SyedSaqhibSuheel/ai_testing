@@ -62,7 +62,7 @@ CI/CD execution  (server/execution/runTests.ts, real `npx playwright test`)
 Report in the dashboard: pass/fail, duration, error, screenshot, trace, history
 ```
 
-Every gate (G1-G4) is a real status transition in SQLite with an audit-log
+Every gate (G1-G4) is a real status transition in Postgres with an audit-log
 row (`approval_audit_log`: who/what/when/why). **Approval mode** (Settings
 page) controls how many of those gates need a human click:
 
@@ -94,13 +94,29 @@ npm install
 cp .env.example .env
 ```
 
+Start Postgres + pgAdmin (one-time per machine, needs Docker Desktop
+running):
+
+```sh
+docker compose up -d
+```
+
+This brings up Postgres on `localhost:5433` (not the default 5432 - see the
+comment in `docker-compose.yml` if another Postgres install is already on
+your machine) and pgAdmin at **http://localhost:5050** (login with
+`PGADMIN_DEFAULT_EMAIL`/`PGADMIN_DEFAULT_PASSWORD` from `docker-compose.yml`;
+the "AI Testing Platform" server is pre-registered there, just enter the
+Postgres password once when prompted) if you want to browse/query the
+platform's tables directly instead of through the dashboard.
+
 Install the browser Playwright MCP needs (one-time, ~180MB):
 
 ```sh
 node_modules/.bin/playwright-mcp install-browser chrome-for-testing
 ```
 
-Apply the database migration (creates `data/platform.db`):
+Apply the database migrations (creates the schema in the Postgres
+container above):
 
 ```sh
 npm run db:migrate
@@ -108,6 +124,8 @@ npm run db:migrate
 
 Edit `.env`:
 
+- `DATABASE_URL` already defaults to the `docker-compose.yml` credentials
+  above - only change it if you're pointing at a different Postgres.
 - Leave `LLM_PROVIDER=mock` to try the whole pipeline offline (no API key
   needed, see **Testing locally** below).
 - Set `LLM_PROVIDER=gemini` + `GEMINI_API_KEY=...` for a genuinely free real
@@ -174,6 +192,7 @@ plumbing (DB, API, agents, real Playwright MCP browser spawn, UI, git
 commits) without spending any API quota:
 
 ```sh
+docker compose up -d   # Postgres must be running first
 # in .env: LLM_PROVIDER=mock
 npm run build
 npm run server:start   # terminal 1

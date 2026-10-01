@@ -144,5 +144,6 @@ getTestRun: (id: string) =>
   // Code analysis (generate requirements/scenarios by scanning the app's own source code)
   listCodeModules: () =>
     request<{ modules: CodeModuleSummary[]; added: AddedCodeRequirementSummary[]; running: boolean }>("/code-analysis/modules"),
-  runCodeAnalysis: (force?: boolean) => request<{ status: string }>("/code-analysis/run", { method: "POST", body: JSON.stringify({ force }) }),
+  runCodeAnalysis: (force?: boolean, autoTest?: boolean) =>
+    request<{ status: string }>("/code-analysis/run", { method: "POST", body: JSON.stringify({ force, autoTest }) }),
 };

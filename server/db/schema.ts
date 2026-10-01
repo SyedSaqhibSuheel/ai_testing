@@ -1,15 +1,15 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, real, boolean, jsonb, timestamp as pgTimestamp } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 
 const id = () => text("id").primaryKey().$defaultFn(() => randomUUID());
-const timestamp = (name: string) => integer(name, { mode: "timestamp" });
-const json = <T = unknown>(name: string) => text(name, { mode: "json" }).$type<T>();
+const timestamp = (name: string) => pgTimestamp(name, { mode: "date" });
+const json = <T = unknown>(name: string) => jsonb(name).$type<T>();
 
 // ---------------------------------------------------------------------------
 // Applications
 // ---------------------------------------------------------------------------
 
-export const applications = sqliteTable("applications", {
+export const applications = pgTable("applications", {
   id: id(),
   name: text("name").notNull().unique(),
   description: text("description"),
@@ -34,7 +34,7 @@ export type RequirementStatus =
 
 export type RequirementSource = "manual" | "code_analysis";
 
-export const requirements = sqliteTable("requirements", {
+export const requirements = pgTable("requirements", {
   id: id(),
   title: text("title").notNull(),
   rawText: text("raw_text").notNull(),
@@ -46,7 +46,7 @@ export const requirements = sqliteTable("requirements", {
   // sourceModule then holds the backend controller class name it was derived from.
   source: text("source").$type<RequirementSource>().notNull().default("manual"),
   sourceModule: text("source_module"),
-  isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+  isDeleted: boolean("is_deleted").notNull().default(false),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -63,7 +63,7 @@ export interface RiskArea {
   reason: string;
 }
 
-export const requirementAnalyses = sqliteTable("requirement_analyses", {
+export const requirementAnalyses = pgTable("requirement_analyses", {
   id: id(),
   requirementId: text("requirement_id").notNull().references(() => requirements.id),
   agentRunId: text("agent_run_id"),
@@ -89,7 +89,7 @@ export type ScenarioStatus =
   | "grounded_pending_review"
   | "approved_for_generation";
 
-export const scenarios = sqliteTable("scenarios", {
+export const scenarios = pgTable("scenarios", {
   id: id(),
 
   requirementId: text("requirement_id")
@@ -111,7 +111,7 @@ export const scenarios = sqliteTable("scenarios", {
   expectedResult: text("expected_result").notNull(),
   aiConfidence: real("ai_confidence"),
   status: text("status").$type<ScenarioStatus>().notNull().default("ai_proposed"),
-  isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
+  isDeleted: boolean("is_deleted").notNull().default(false),
   approvedBy: text("approved_by"),
   approvedAt: timestamp("approved_at"),
   rejectedReason: text("rejected_reason"),
@@ -129,7 +129,7 @@ export interface DiscoveredTestId {
   source: "static" | "live" | "both";
 }
 
-export const explorationRuns = sqliteTable("exploration_runs", {
+export const explorationRuns = pgTable("exploration_runs", {
   id: id(),
   requirementId: text("requirement_id").notNull().references(() => requirements.id),
   agentRunId: text("agent_run_id"),
@@ -157,7 +157,7 @@ export type TestFileStatus =
   | "rejected"
   | "committed";
 
-export const testFiles = sqliteTable("test_files", {
+export const testFiles = pgTable("test_files", {
   id: id(),
   requirementId: text("requirement_id").notNull().references(() => requirements.id),
   filePath: text("file_path").notNull(),
@@ -166,18 +166,18 @@ export const testFiles = sqliteTable("test_files", {
   status: text("status").$type<TestFileStatus>().notNull().default("generating"),
   validationError: text("validation_error"),
   generatedByAgentRunId: text("generated_by_agent_run_id"),
-  isLatest: integer("is_latest", { mode: "boolean" }).notNull().default(true),
+  isLatest: boolean("is_latest").notNull().default(true),
   // Off for test files that navigate to a live third-party site (e.g. real
   // amazon.com) - repeated automated hits from every auto-after-commit run
   // trip the site's own bot detection (CAPTCHA challenges), so those files
   // must be run manually and sparingly instead.
-  autoRunOnCommit: integer("auto_run_on_commit", { mode: "boolean" }).notNull().default(true),
+  autoRunOnCommit: boolean("auto_run_on_commit").notNull().default(true),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by"),
 });
 
-export const testFileScenarios = sqliteTable("test_file_scenarios", {
+export const testFileScenarios = pgTable("test_file_scenarios", {
   id: id(),
   testFileId: text("test_file_id").notNull().references(() => testFiles.id),
   scenarioId: text("scenario_id").notNull().references(() => scenarios.id),
@@ -189,7 +189,7 @@ export const testFileScenarios = sqliteTable("test_file_scenarios", {
 // Git integration (local commits only, Phase 1)
 // ---------------------------------------------------------------------------
 
-export const gitCommits = sqliteTable("git_commits", {
+export const gitCommits = pgTable("git_commits", {
   id: id(),
   commitSha: text("commit_sha").notNull(),
   branch: text("branch").notNull(),
@@ -199,7 +199,7 @@ export const gitCommits = sqliteTable("git_commits", {
   committedAt: timestamp("committed_at").notNull().$defaultFn(() => new Date()),
 });
 
-export const gitCommitFiles = sqliteTable("git_commit_files", {
+export const gitCommitFiles = pgTable("git_commit_files", {
   id: id(),
   commitId: text("commit_id").notNull().references(() => gitCommits.id),
   testFileId: text("test_file_id").notNull().references(() => testFiles.id),
@@ -217,7 +217,7 @@ export const gitCommitFiles = sqliteTable("git_commit_files", {
 export type TestRunStatus = "running" | "passed" | "failed" | "error";
 export type TestRunTrigger = "manual" | "auto_after_commit";
 
-export const testRuns = sqliteTable("test_runs", {
+export const testRuns = pgTable("test_runs", {
   id: id(),
   testFileId: text("test_file_id").notNull().references(() => testFiles.id),
   triggeredBy: text("triggered_by").$type<TestRunTrigger>().notNull(),
@@ -239,7 +239,7 @@ export const testRuns = sqliteTable("test_runs", {
   appUrl: text("app_url"),
 });
 
-export const testRunCases = sqliteTable("test_run_cases", {
+export const testRunCases = pgTable("test_run_cases", {
   id: id(),
   testRunId: text("test_run_id").notNull().references(() => testRuns.id),
   suiteTitle: text("suite_title"),
@@ -271,7 +271,7 @@ export const testRunCases = sqliteTable("test_run_cases", {
 export type AgentType = "intelligence" | "planner" | "generator" | "code_analysis";
 export type AgentRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
-export const agentRuns = sqliteTable("agent_runs", {
+export const agentRuns = pgTable("agent_runs", {
   id: id(),
   agentType: text("agent_type").$type<AgentType>().notNull(),
   requirementId: text("requirement_id").notNull().references(() => requirements.id),
@@ -291,7 +291,7 @@ export const agentRuns = sqliteTable("agent_runs", {
 // Approval audit trail
 // ---------------------------------------------------------------------------
 
-export const approvalAuditLog = sqliteTable("approval_audit_log", {
+export const approvalAuditLog = pgTable("approval_audit_log", {
   id: id(),
   entityType: text("entity_type").$type<"scenario" | "test_file" | "git_commit">().notNull(),
   entityId: text("entity_id").notNull(),
@@ -310,8 +310,8 @@ export const approvalAuditLog = sqliteTable("approval_audit_log", {
 
 export type ApprovalMode = "manual" | "semi_automatic" | "fully_automatic";
 
-export const settings = sqliteTable("settings", {
+export const settings = pgTable("settings", {
   key: text("key").primaryKey(),
-  value: text("value", { mode: "json" }),
+  value: jsonb("value"),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });

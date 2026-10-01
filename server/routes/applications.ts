@@ -7,18 +7,13 @@ export function applicationsRouter(db: Db): Router {
   const router = Router();
 
   // Get all applications
-  router.get("/", (req, res) => {
-    const rows = db
-      .select()
-      .from(applications)
-      .orderBy(desc(applications.createdAt))
-      .all();
-
+  router.get("/", async (req, res) => {
+    const rows = await db.select().from(applications).orderBy(desc(applications.createdAt));
     res.json(rows);
   });
 
   // Create a new application
-  router.post("/", (req, res) => {
+  router.post("/", async (req, res) => {
     const { name, description } = req.body ?? {};
 
     if (typeof name !== "string" || !name.trim()) {
@@ -27,7 +22,7 @@ export function applicationsRouter(db: Db): Router {
     }
 
     try {
-      const row = db
+      const [row] = await db
         .insert(applications)
         .values({
           name: name.trim(),
@@ -36,8 +31,7 @@ export function applicationsRouter(db: Db): Router {
               ? description.trim()
               : null,
         })
-        .returning()
-        .get();
+        .returning();
 
       res.status(201).json(row);
     } catch (err) {
@@ -51,12 +45,8 @@ export function applicationsRouter(db: Db): Router {
   });
 
   // Get one application
-  router.get("/:id", (req, res) => {
-    const application = db
-      .select()
-      .from(applications)
-      .where(eq(applications.id, req.params.id))
-      .get();
+  router.get("/:id", async (req, res) => {
+    const [application] = await db.select().from(applications).where(eq(applications.id, req.params.id));
 
     if (!application) {
       res.status(404).json({ error: "Application not found" });

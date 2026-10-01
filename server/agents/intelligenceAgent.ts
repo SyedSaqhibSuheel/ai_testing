@@ -58,24 +58,24 @@ async function callIntelligenceLlm(config: Config, requirementText: string, isKn
  * ground scenarios against the live app - that's the Planner's job.
  */
 export async function runIntelligenceAgent(db: Db, config: Config, requirementId: string, activeAppBaseUrl?: string): Promise<void> {
-  const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
+  const [requirement] = await db.select().from(requirements).where(eq(requirements.id, requirementId));
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
-  const runId = startAgentRun(db, { agentType: "intelligence", requirementId, input: { requirementText: requirement.rawText } });
-  db.update(requirements).set({ status: "analyzing", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+  const runId = await startAgentRun(db, { agentType: "intelligence", requirementId, input: { requirementText: requirement.rawText } });
+  await db.update(requirements).set({ status: "analyzing", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
 
   try {
-    updateAgentRunTask(db, runId, "Analyzing");
+    await updateAgentRunTask(db, runId, "Analyzing");
     const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
     const analysis = await callIntelligenceLlm(config, requirement.rawText, isKnownApp);
 
-    const { analysisId, scenarioCount } = persistIntelligenceAnalysis(db, config, requirementId, runId, analysis);
+    const { analysisId, scenarioCount } = await persistIntelligenceAnalysis(db, config, requirementId, runId, analysis);
 
-    completeAgentRun(db, runId, { analysisId, scenarioCount });
+    await completeAgentRun(db, runId, { analysisId, scenarioCount });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    failAgentRun(db, runId, message);
-    db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+    await failAgentRun(db, runId, message);
+    await db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
     throw err;
   }
 }
@@ -93,19 +93,19 @@ export async function regenerateScenario(
   feedback?: string,
   activeAppBaseUrl?: string
 ): Promise<string> {
-  const scenario = db.select().from(scenarios).where(eq(scenarios.id, scenarioId)).get();
+  const [scenario] = await db.select().from(scenarios).where(eq(scenarios.id, scenarioId));
   if (!scenario) throw new Error(`Scenario ${scenarioId} not found`);
-  const requirement = db.select().from(requirements).where(eq(requirements.id, scenario.requirementId)).get();
+  const [requirement] = await db.select().from(requirements).where(eq(requirements.id, scenario.requirementId));
   if (!requirement) throw new Error(`Requirement ${scenario.requirementId} not found`);
   const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
 
-  const runId = startAgentRun(db, {
+  const runId = await startAgentRun(db, {
     agentType: "intelligence",
     requirementId: scenario.requirementId,
     scenarioId,
     input: { regenerating: scenarioId, feedback },
   });
-  updateAgentRunTask(db, runId, "Analyzing");
+  await updateAgentRunTask(db, runId, "Analyzing");
 
   try {
     const relevant = isKnownApp
@@ -128,26 +128,24 @@ export async function regenerateScenario(
       throw new Error(`Regenerate output failed schema validation: ${parsed.success ? "no scenarios returned" : JSON.stringify(parsed.error.issues)}`);
     }
 
-    db.update(scenarios).set({ isDeleted: true, updatedAt: new Date() }).where(eq(scenarios.id, scenarioId)).run();
-    db.insert(approvalAuditLog)
-      .values({
-        entityType: "scenario",
-        entityId: scenarioId,
-        action: "regenerate_requested",
-        actorType: "human",
-        actor,
-        reason: feedback,
-        previousStatus: scenario.status,
-        newStatus: "rejected",
-      })
-      .run();
+    await db.update(scenarios).set({ isDeleted: true, updatedAt: new Date() }).where(eq(scenarios.id, scenarioId));
+    await db.insert(approvalAuditLog).values({
+      entityType: "scenario",
+      entityId: scenarioId,
+      action: "regenerate_requested",
+      actorType: "human",
+      actor,
+      reason: feedback,
+      previousStatus: scenario.status,
+      newStatus: "rejected",
+    });
 
-    const newId = insertScenarioFromDraft(db, parsed.data.scenarios[0], scenario.requirementId, scenario.analysisId);
-    completeAgentRun(db, runId, { replacedScenarioId: scenarioId, newScenarioId: newId });
+    const newId = await insertScenarioFromDraft(db, parsed.data.scenarios[0], scenario.requirementId, scenario.analysisId);
+    await completeAgentRun(db, runId, { replacedScenarioId: scenarioId, newScenarioId: newId });
     return newId;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    failAgentRun(db, runId, message);
+    await failAgentRun(db, runId, message);
     throw err;
   }
 }

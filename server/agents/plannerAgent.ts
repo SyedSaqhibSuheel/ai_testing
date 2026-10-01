@@ -47,22 +47,21 @@ function mergeTestIdSources(
  * human review. Never asserts pass/fail - that's a future phase.
  */
 export async function runPlannerAgent(db: Db, config: Config, requirementId: string, appBaseUrl?: string): Promise<void> {
-  const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
+  const [requirement] = await db.select().from(requirements).where(eq(requirements.id, requirementId));
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
-  const approvedScenarios = db
+  const approvedScenarios = await db
     .select()
     .from(scenarios)
-    .where(and(eq(scenarios.requirementId, requirementId), eq(scenarios.status, "approved")))
-    .all();
+    .where(and(eq(scenarios.requirementId, requirementId), eq(scenarios.status, "approved")));
   if (approvedScenarios.length === 0) {
     throw new Error("No approved scenarios to plan for - approve at least one scenario first.");
   }
 
-  const runId = startAgentRun(db, { agentType: "planner", requirementId, input: { scenarioIds: approvedScenarios.map((s) => s.id) } });
-  db.update(requirements).set({ status: "planning", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+  const runId = await startAgentRun(db, { agentType: "planner", requirementId, input: { scenarioIds: approvedScenarios.map((s) => s.id) } });
+  await db.update(requirements).set({ status: "planning", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
   for (const s of approvedScenarios) {
-    db.update(scenarios).set({ status: "grounding_in_progress", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
+    await db.update(scenarios).set({ status: "grounding_in_progress", updatedAt: new Date() }).where(eq(scenarios.id, s.id));
   }
 
   const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
@@ -75,7 +74,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
   const mcpSession = await startPlaywrightMcp(config.rootDir, config.mcpHeadless);
 
   try {
-    updateAgentRunTask(db, runId, "Exploring application");
+    await updateAgentRunTask(db, runId, "Exploring application");
     const explored = await exploreApp(
       provider,
       mcpSession,
@@ -99,7 +98,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
     });
 
     const staticTestIds = context ? new Set(context.frontend.components.flatMap((c) => c.testIds)) : new Set<string>();
-    const explorationRow = db
+    const [explorationRow] = await db
       .insert(explorationRuns)
       .values({
         requirementId,
@@ -113,11 +112,10 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
         status: explored.status === "timeout" ? "timeout" : "completed",
         finishedAt: new Date(),
       })
-      .returning({ id: explorationRuns.id })
-      .get();
+      .returning({ id: explorationRuns.id });
     explorationId = explorationRow.id;
 
-    updateAgentRunTask(db, runId, "Building test plan");
+    await updateAgentRunTask(db, runId, "Building test plan");
     const groundSystem = buildGroundSystemPrompt();
     const groundUser = buildGroundUserPrompt(
       requirement.rawText,
@@ -139,21 +137,21 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
       throw new Error(`Grounding output failed schema validation: ${JSON.stringify(parsed.error.issues)}`);
     }
 
-    const { approvalMode } = getPlatformSettings(db, config);
+    const { approvalMode } = await getPlatformSettings(db, config);
     const autoApproveG2 = shouldAutoApprove(approvalMode, "G2_grounded_plan", true);
 
     const plansById = new Map(parsed.data.plans.map((p) => [p.id, p]));
     for (const s of approvedScenarios) {
       const plan = plansById.get(s.id);
-      db.update(scenarios)
+      await db
+        .update(scenarios)
         .set({ groundedPlan: plan ?? null, status: "grounded_pending_review", updatedAt: new Date() })
-        .where(eq(scenarios.id, s.id))
-        .run();
-      if (autoApproveG2) approveScenario(db, s.id, "system", "system_auto");
+        .where(eq(scenarios.id, s.id));
+      if (autoApproveG2) await approveScenario(db, s.id, "system", "system_auto");
     }
 
-    db.update(requirements).set({ status: "awaiting_plan_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
-    completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: plansById.size });
+    await db.update(requirements).set({ status: "awaiting_plan_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
+    await completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: plansById.size });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -164,17 +162,17 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
 
       // Mark scenarios as approved without planning (they can still be committed and run)
       for (const s of approvedScenarios) {
-        db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
+        await db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id));
       }
-      db.update(requirements).set({ status: "awaiting_scenario_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
-      completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: 0 });
+      await db.update(requirements).set({ status: "awaiting_scenario_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
+      await completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: 0 });
       return;
     }
 
-    failAgentRun(db, runId, message);
-    db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+    await failAgentRun(db, runId, message);
+    await db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
     for (const s of approvedScenarios) {
-      db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
+      await db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id));
     }
     throw err;
   } finally {
@@ -182,11 +180,12 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
   }
 }
 
-export function getLatestExplorationRun(db: Db, requirementId: string) {
-  return db
+export async function getLatestExplorationRun(db: Db, requirementId: string) {
+  const [row] = await db
     .select()
     .from(explorationRuns)
     .where(eq(explorationRuns.requirementId, requirementId))
     .orderBy(desc(explorationRuns.startedAt))
-    .get();
+    .limit(1);
+  return row;
 }

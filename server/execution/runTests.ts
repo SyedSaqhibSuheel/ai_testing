@@ -72,7 +72,7 @@ export async function runPlaywrightTest(
   triggeredBy: "manual" | "auto_after_commit",
   appBaseUrl?: string
 ): Promise<string> {
-  const file = db.select().from(testFiles).where(eq(testFiles.id, testFileId)).get();
+  const [file] = await db.select().from(testFiles).where(eq(testFiles.id, testFileId));
   if (!file) throw new Error(`Test file ${testFileId} not found`);
 
   // Resolved once up front (rather than inside the spawn Promise below) so it
@@ -80,15 +80,14 @@ export async function runPlaywrightTest(
   // be grouped/filtered by website even after settings.testAppUrl changes later.
   const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
 
-  const runRow = db
+  const [runRow] = await db
     .insert(testRuns)
     .values({ testFileId, triggeredBy, status: "running", appUrl: targetAppUrl })
-    .returning({ id: testRuns.id })
-    .get();
+    .returning({ id: testRuns.id });
   const runId = runRow.id;
   const artifactsDir = path.join("test-results", runId);
   const jsonReportPath = path.join(config.managedRepoDir, artifactsDir, "report.json");
-  db.update(testRuns).set({ artifactsDir }).where(eq(testRuns.id, runId)).run();
+  await db.update(testRuns).set({ artifactsDir }).where(eq(testRuns.id, runId));
 
   try {
     // These are validation failures, not execution failures, but they must
@@ -175,7 +174,7 @@ export async function runPlaywrightTest(
       const screenshot = result.attachments?.find((a) => a.name === "screenshot");
       const trace = result.attachments?.find((a) => a.name === "trace");
 
-      const caseRow = db
+      const [caseRow] = await db
         .insert(testRunCases)
         .values({
           testRunId: runId,
@@ -190,13 +189,13 @@ export async function runPlaywrightTest(
           stdout: stringifyStd(result.stdout),
           stderr: stringifyStd(result.stderr),
         })
-        .returning({ id: testRunCases.id })
-        .get();
+        .returning({ id: testRunCases.id });
 
       if (status === "failed" || status === "timedOut") failedCaseIds.push(caseRow.id);
     }
 
-    db.update(testRuns)
+    await db
+      .update(testRuns)
       .set({
         status: failed > 0 ? "failed" : "passed",
         finishedAt: new Date(),
@@ -206,8 +205,7 @@ export async function runPlaywrightTest(
         failedCount: failed,
         skippedCount: skipped,
       })
-      .where(eq(testRuns.id, runId))
-      .run();
+      .where(eq(testRuns.id, runId));
 
     // Classify each failure (real defect vs locator drift vs bad test vs
     // environment down) so only genuine REAL_DEFECT cases surface as a "Bug"
@@ -221,7 +219,7 @@ export async function runPlaywrightTest(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    db.update(testRuns).set({ status: "error", errorMessage: message, finishedAt: new Date() }).where(eq(testRuns.id, runId)).run();
+    await db.update(testRuns).set({ status: "error", errorMessage: message, finishedAt: new Date() }).where(eq(testRuns.id, runId));
   }
 
   return runId;

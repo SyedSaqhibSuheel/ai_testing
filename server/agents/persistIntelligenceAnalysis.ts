@@ -7,13 +7,13 @@ import { getPlatformSettings } from "../settings/settingsService.js";
 import { shouldAutoApprove } from "../approval/gate.js";
 import { approveScenario } from "../scenarios/scenarioTransitions.js";
 
-export function insertScenarioFromDraft(
+export async function insertScenarioFromDraft(
   db: Db,
   draft: DraftScenario,
   requirementId: string,
   analysisId: string | null
-): string {
-  const row = db
+): Promise<string> {
+  const [row] = await db
     .insert(scenarios)
     .values({
       requirementId,
@@ -29,8 +29,7 @@ export function insertScenarioFromDraft(
       aiConfidence: draft.aiConfidence,
       status: "ai_proposed",
     })
-    .returning({ id: scenarios.id })
-    .get();
+    .returning({ id: scenarios.id });
   return row.id;
 }
 
@@ -41,14 +40,14 @@ export function insertScenarioFromDraft(
  * scenarios, apply the same auto-approval gate, and advance the requirement
  * to `awaiting_scenario_approval` identically.
  */
-export function persistIntelligenceAnalysis(
+export async function persistIntelligenceAnalysis(
   db: Db,
   config: Config,
   requirementId: string,
   agentRunId: string,
   analysis: IntelligenceAnalysis
-): { analysisId: string; scenarioCount: number } {
-  const analysisRow = db
+): Promise<{ analysisId: string; scenarioCount: number }> {
+  const [analysisRow] = await db
     .insert(requirementAnalyses)
     .values({
       requirementId,
@@ -61,20 +60,19 @@ export function persistIntelligenceAnalysis(
       rawModelOutput: analysis,
       status: "completed",
     })
-    .returning({ id: requirementAnalyses.id })
-    .get();
+    .returning({ id: requirementAnalyses.id });
 
-  const { approvalMode } = getPlatformSettings(db, config);
+  const { approvalMode } = await getPlatformSettings(db, config);
   const autoApproveG1 = shouldAutoApprove(approvalMode, "G1_scenario_intent", true);
   for (const draft of analysis.scenarios) {
-    const newId = insertScenarioFromDraft(db, draft, requirementId, analysisRow.id);
-    if (autoApproveG1) approveScenario(db, newId, "system", "system_auto");
+    const newId = await insertScenarioFromDraft(db, draft, requirementId, analysisRow.id);
+    if (autoApproveG1) await approveScenario(db, newId, "system", "system_auto");
   }
 
-  db.update(requirements)
+  await db
+    .update(requirements)
     .set({ status: "awaiting_scenario_approval", currentAnalysisId: analysisRow.id, updatedAt: new Date() })
-    .where(eq(requirements.id, requirementId))
-    .run();
+    .where(eq(requirements.id, requirementId));
 
   return { analysisId: analysisRow.id, scenarioCount: analysis.scenarios.length };
 }

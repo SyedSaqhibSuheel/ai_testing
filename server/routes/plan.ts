@@ -10,8 +10,8 @@ import { getPlatformSettings } from "../settings/settingsService.js";
 export function planRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
 
-  router.post("/requirements/:id/plan", (req, res) => {
-    const requirement = db.select().from(requirements).where(eq(requirements.id, req.params.id)).get();
+  router.post("/requirements/:id/plan", async (req, res) => {
+    const [requirement] = await db.select().from(requirements).where(eq(requirements.id, req.params.id));
     if (!requirement) {
       res.status(404).json({ error: "Requirement not found" });
       return;
@@ -23,7 +23,7 @@ export function planRouter(db: Db, config: Config, urlConfigService?: URLConfigS
     // profile" is in-memory only - it resets to "default" (localhost) on
     // every server restart - so it's used only as a last-resort fallback,
     // never allowed to override an explicit testAppUrl.
-    const settings = getPlatformSettings(db, config);
+    const settings = await getPlatformSettings(db, config);
     const activeUrlConfig = urlConfigService ? urlConfigService.getActiveConfig() : { appBaseUrl: config.appBaseUrl, apiBaseUrl: config.apiBaseUrl };
     const targetAppUrl = settings.testAppUrl || activeUrlConfig.appBaseUrl;
 
@@ -33,8 +33,8 @@ export function planRouter(db: Db, config: Config, urlConfigService?: URLConfigS
     res.status(202).json({ status: "planning" });
   });
 
-  router.get("/requirements/:id/exploration", (req, res) => {
-    const row = getLatestExplorationRun(db, req.params.id);
+  router.get("/requirements/:id/exploration", async (req, res) => {
+    const row = await getLatestExplorationRun(db, req.params.id);
     if (!row) {
       res.status(404).json({ error: "No exploration run yet for this requirement" });
       return;

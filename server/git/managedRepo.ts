@@ -1,10 +1,12 @@
 import { simpleGit } from "simple-git";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { testFiles, gitCommits, gitCommitFiles, approvalAuditLog, requirements } from "../db/schema.js";
+import { runPlaywrightTest } from "../execution/runTests.js";
+import { getPlatformSettings } from "../settings/settingsService.js";
 
 function repo(config: Config) {
   return simpleGit(config.managedRepoDir);
@@ -54,13 +56,15 @@ export async function commitApprovedTestFiles(
   message: string,
   author: string
 ): Promise<{ commitSha: string; filesChanged: string[]; status?: string }> {
-  const files = testFileIds.map((id) => {
-    const row = db.select().from(testFiles).where(eq(testFiles.id, id)).get();
-    if (!row) throw new Error(`Test file ${id} not found`);
-    if (row.status === "committed") throw new Error(`Test file ${id} is already committed. Regenerate it to create a new version for committing.`);
-    if (row.status !== "approved") throw new Error(`Test file ${id} is not approved (status: ${row.status}) - approve it before committing.`);
-    return row;
-  });
+  const files = await Promise.all(
+    testFileIds.map(async (id) => {
+      const [row] = await db.select().from(testFiles).where(eq(testFiles.id, id));
+      if (!row) throw new Error(`Test file ${id} not found`);
+      if (row.status === "committed") throw new Error(`Test file ${id} is already committed. Regenerate it to create a new version for committing.`);
+      if (row.status !== "approved") throw new Error(`Test file ${id} is not approved (status: ${row.status}) - approve it before committing.`);
+      return row;
+    })
+  );
   if (files.length === 0) throw new Error("No test file ids given to commit.");
 
   const git = repo(config);
@@ -98,9 +102,9 @@ export async function commitApprovedTestFiles(
 
     // Since files are already committed, just update their status in DB
     for (const file of files) {
-      const currentStatus = db.select().from(testFiles).where(eq(testFiles.id, file.id)).get()?.status;
-      if (currentStatus !== "committed") {
-        db.update(testFiles).set({ status: "committed" }).where(eq(testFiles.id, file.id)).run();
+      const [current] = await db.select().from(testFiles).where(eq(testFiles.id, file.id));
+      if (current?.status !== "committed") {
+        await db.update(testFiles).set({ status: "committed" }).where(eq(testFiles.id, file.id));
       }
     }
 
@@ -124,32 +128,52 @@ export async function commitApprovedTestFiles(
   const branchSummary = await git.branch();
 
   // Step 5: Record commit in database
-  const commitRow = db
+  const [commitRow] = await db
     .insert(gitCommits)
     .values({ commitSha, branch: branchSummary.current ?? config.managedRepoBranch, message, author })
-    .returning({ id: gitCommits.id })
-    .get();
+    .returning({ id: gitCommits.id });
 
   for (const file of files) {
-    db.insert(gitCommitFiles).values({ commitId: commitRow.id, testFileId: file.id, filePathAtCommit: file.filePath }).run();
-    db.update(testFiles).set({ status: "committed" }).where(eq(testFiles.id, file.id)).run();
-    db.insert(approvalAuditLog)
-      .values({
-        entityType: "git_commit",
-        entityId: commitRow.id,
-        action: "approved",
-        actorType: "human",
-        actor: author,
-        previousStatus: "approved",
-        newStatus: "committed",
-      })
-      .run();
+    await db.insert(gitCommitFiles).values({ commitId: commitRow.id, testFileId: file.id, filePathAtCommit: file.filePath });
+    await db.update(testFiles).set({ status: "committed" }).where(eq(testFiles.id, file.id));
+    await db.insert(approvalAuditLog).values({
+      entityType: "git_commit",
+      entityId: commitRow.id,
+      action: "approved",
+      actorType: "human",
+      actor: author,
+      previousStatus: "approved",
+      newStatus: "committed",
+    });
   }
 
   const requirementIds = [...new Set(files.map((f) => f.requirementId))];
   for (const reqId of requirementIds) {
-    db.update(requirements).set({ status: "committed", updatedAt: new Date() }).where(eq(requirements.id, reqId)).run();
+    await db.update(requirements).set({ status: "committed", updatedAt: new Date() }).where(eq(requirements.id, reqId));
   }
 
   return { commitSha, filesChanged: relativePaths };
+}
+
+/**
+ * Fire-and-forget: for each just-committed test file that has
+ * `autoRunOnCommit` set (the default), kicks off a real `npx playwright
+ * test` run in the background - same behavior whether the commit came from
+ * a human clicking "Commit to Git" or from an agent auto-committing under
+ * Semi/Fully-Automatic mode's G4. Without calling this, an auto-committed
+ * test sits there generated and committed but never actually executed,
+ * silently defeating the point of automatic mode.
+ */
+export async function triggerAutoRunForCommittedFiles(db: Db, config: Config, testFileIds: string[]): Promise<void> {
+  const { testAppUrl } = await getPlatformSettings(db, config);
+  const rows = await db
+    .select({ id: testFiles.id, autoRunOnCommit: testFiles.autoRunOnCommit })
+    .from(testFiles)
+    .where(inArray(testFiles.id, testFileIds));
+  for (const row of rows) {
+    if (!row.autoRunOnCommit) continue;
+    runPlaywrightTest(db, config, row.id, "auto_after_commit", testAppUrl).catch((err) => {
+      console.error(`Auto test run failed for test file ${row.id}:`, err);
+    });
+  }
 }

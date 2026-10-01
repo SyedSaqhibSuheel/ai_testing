@@ -32,24 +32,29 @@ export class URLConfigService {
       options.defaultApiBaseUrl
     );
     this.initializeDefaultProfiles();
-    this.loadPersisted();
+    void this.loadPersisted();
   }
 
   /**
    * Profiles added/switched from the Settings UI must survive a server
    * restart, otherwise "active" silently reverts to the .env default on
    * every deploy/restart - restore whatever was last saved to the settings
-   * table, if anything.
+   * table, if anything. Fire-and-forget from the constructor (which can't be
+   * async): this only affects the brief window right after startup, before
+   * any request has had a chance to read the active config.
    */
-  private loadPersisted(): void {
-    const persisted = getSetting<URLConfig | undefined>(this.db, "urlConfig", undefined);
+  private async loadPersisted(): Promise<void> {
+    const persisted = await getSetting<URLConfig | undefined>(this.db, "urlConfig", undefined);
     if (persisted && persisted.profiles.some((p) => p.id === persisted.activeProfileId)) {
       this.manager.setConfig(persisted);
     }
   }
 
+  // Fire-and-forget: this.manager (in-memory) is already updated synchronously
+  // by every caller before this runs, so readers never wait on the DB write -
+  // it only exists so the change survives a restart.
   private persist(): void {
-    setSetting(this.db, "urlConfig", this.manager.getConfig());
+    void setSetting(this.db, "urlConfig", this.manager.getConfig());
   }
 
   /**

@@ -1,0 +1,47 @@
+# Local Postgres + pgAdmin for the AI Testing Platform.
+# Credentials below are local-dev defaults only - never reuse them anywhere
+# real. Start with: docker compose up -d
+# pgAdmin: http://localhost:5050 (login with PGADMIN_DEFAULT_EMAIL/PASSWORD
+# below) - the "AI Testing Platform" server is pre-registered; it'll prompt
+# for the Postgres password once (same POSTGRES_PASSWORD below).
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ai_testing
+      POSTGRES_PASSWORD: ai_testing_dev_password
+      POSTGRES_DB: ai_testing
+    ports:
+      # Host port 5433, not 5432: this machine already has a native Postgres
+      # install bound to 5432, and Docker Desktop's WSL2 networking doesn't
+      # reliably error on the collision - connections can silently land on
+      # the wrong server instead of failing outright.
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_testing"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: ai_testing_dev_password
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./docker/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  pgadmin-data:

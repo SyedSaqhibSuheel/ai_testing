@@ -24,29 +24,29 @@ const SETTINGS_DEFAULTS = {
   agentTimeoutMs: 120_000,
 };
 
-export function getSetting<T>(db: Db, key: string, fallback: T): T {
-  const row = db.select().from(settings).where(eq(settings.key, key)).get();
+export async function getSetting<T>(db: Db, key: string, fallback: T): Promise<T> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, key));
   return row?.value !== null && row?.value !== undefined ? (row.value as T) : fallback;
 }
 
-export function setSetting(db: Db, key: string, value: unknown): void {
-  db.insert(settings)
+export async function setSetting(db: Db, key: string, value: unknown): Promise<void> {
+  await db
+    .insert(settings)
     .values({ key, value: value as never, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: settings.key, set: { value: value as never, updatedAt: new Date() } })
-    .run();
+    .onConflictDoUpdate({ target: settings.key, set: { value: value as never, updatedAt: new Date() } });
 }
 
-export function getPlatformSettings(db: Db, config: Config): PlatformSettings {
+export async function getPlatformSettings(db: Db, config: Config): Promise<PlatformSettings> {
   return {
-    approvalMode: getSetting(db, "approvalMode", SETTINGS_DEFAULTS.approvalMode),
-    llmProvider: getSetting(db, "llmProvider", config.llmProvider),
-    maxRetries: getSetting(db, "maxRetries", SETTINGS_DEFAULTS.maxRetries),
-    agentTimeoutMs: getSetting(db, "agentTimeoutMs", SETTINGS_DEFAULTS.agentTimeoutMs),
-    managedRepoDir: getSetting(db, "managedRepoDir", config.managedRepoDir),
-    managedRepoBranch: getSetting(db, "managedRepoBranch", config.managedRepoBranch),
+    approvalMode: await getSetting(db, "approvalMode", SETTINGS_DEFAULTS.approvalMode),
+    llmProvider: await getSetting(db, "llmProvider", config.llmProvider),
+    maxRetries: await getSetting(db, "maxRetries", SETTINGS_DEFAULTS.maxRetries),
+    agentTimeoutMs: await getSetting(db, "agentTimeoutMs", SETTINGS_DEFAULTS.agentTimeoutMs),
+    managedRepoDir: await getSetting(db, "managedRepoDir", config.managedRepoDir),
+    managedRepoBranch: await getSetting(db, "managedRepoBranch", config.managedRepoBranch),
     appBaseUrl: config.appBaseUrl,
     apiBaseUrl: config.apiBaseUrl,
-    testAppUrl: getSetting(db, "testAppUrl", undefined),
+    testAppUrl: await getSetting<string | undefined>(db, "testAppUrl", undefined),
   };
 }
 
@@ -59,9 +59,9 @@ export interface MaskedSettings extends PlatformSettings {
   };
 }
 
-export function getMaskedSettings(db: Db, config: Config): MaskedSettings {
+export async function getMaskedSettings(db: Db, config: Config): Promise<MaskedSettings> {
   return {
-    ...getPlatformSettings(db, config),
+    ...(await getPlatformSettings(db, config)),
     secretsPresent: {
       anthropicApiKey: !!config.anthropicApiKey,
       openaiApiKey: !!config.openaiApiKey,
@@ -80,10 +80,10 @@ const UPDATABLE_KEYS = new Set<keyof PlatformSettings>([
   "testAppUrl",
 ]);
 
-export function updatePlatformSettings(db: Db, patch: Partial<PlatformSettings>): void {
+export async function updatePlatformSettings(db: Db, patch: Partial<PlatformSettings>): Promise<void> {
   for (const [key, value] of Object.entries(patch)) {
     if (UPDATABLE_KEYS.has(key as keyof PlatformSettings) && value !== undefined) {
-      setSetting(db, key, value);
+      await setSetting(db, key, value);
     }
   }
 }

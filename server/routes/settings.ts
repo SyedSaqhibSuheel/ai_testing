@@ -6,13 +6,13 @@ import { getMaskedSettings, updatePlatformSettings } from "../settings/settingsS
 export function settingsRouter(db: Db, config: Config): Router {
   const router = Router();
 
-  router.get("/", (_req, res) => {
-    res.json(getMaskedSettings(db, config));
+  router.get("/", async (_req, res) => {
+    res.json(await getMaskedSettings(db, config));
   });
 
-  router.patch("/", (req, res) => {
-    updatePlatformSettings(db, req.body ?? {});
-    res.json(getMaskedSettings(db, config));
+  router.patch("/", async (req, res) => {
+    await updatePlatformSettings(db, req.body ?? {});
+    res.json(await getMaskedSettings(db, config));
   });
 
   // Verify Gemini API key

@@ -6,9 +6,10 @@ import { listCodeModules, listAddedCodeRequirements, isCodeAnalysisBatchRunning,
 export function codeAnalysisRouter(db: Db, config: Config): Router {
   const router = Router();
 
-  router.get("/modules", (req, res) => {
-    const modules = listCodeModules(db, config);
-    res.json({ modules, added: listAddedCodeRequirements(db, config), running: isCodeAnalysisBatchRunning() });
+  router.get("/modules", async (req, res) => {
+    const modules = await listCodeModules(db, config);
+    const added = await listAddedCodeRequirements(db, config);
+    res.json({ modules, added, running: isCodeAnalysisBatchRunning() });
   });
 
   router.post("/run", (req, res) => {
@@ -17,10 +18,11 @@ export function codeAnalysisRouter(db: Db, config: Config): Router {
       return;
     }
     const force = req.body?.force === true;
+    const autoTest = req.body?.autoTest === true;
     // Fire-and-forget: analyzing every module is many sequential real LLM
     // calls, so the client polls GET /modules (and Requirements/Agent
     // Activity, which fill in live as each module completes) for progress.
-    runCodeAnalysisBatch(db, config, { force }).catch((err) => {
+    runCodeAnalysisBatch(db, config, { force, autoTest }).catch((err) => {
       console.error("Code analysis batch failed:", err);
     });
     res.status(202).json({ status: "running" });

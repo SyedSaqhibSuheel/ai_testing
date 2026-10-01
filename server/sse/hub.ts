@@ -15,8 +15,8 @@ import { onAgentRunChange } from "../agents/agentRunTracking.js";
 export function attachSseHub(db: Db, app: { get: (path: string, handler: (req: Request, res: Response) => void) => void }): void {
   const clients = new Set<Response>();
 
-  onAgentRunChange((runId) => {
-    const run = db.select().from(agentRuns).where(eq(agentRuns.id, runId)).get();
+  onAgentRunChange(async (runId) => {
+    const [run] = await db.select().from(agentRuns).where(eq(agentRuns.id, runId));
     if (!run) return;
     const payload = `data: ${JSON.stringify(run)}\n\n`;
     for (const res of clients) res.write(payload);

@@ -14,7 +14,7 @@ import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } fro
 import { getPlatformSettings } from "../settings/settingsService.js";
 import { shouldAutoApprove } from "../approval/gate.js";
 import { approveTestFile } from "../testFiles/testFileTransitions.js";
-import { commitApprovedTestFiles } from "../git/managedRepo.js";
+import { commitApprovedTestFiles, triggerAutoRunForCommittedFiles } from "../git/managedRepo.js";
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -40,23 +40,22 @@ function slugify(text: string): string {
  * overwriting.
  */
 export async function runGeneratorAgent(db: Db, config: Config, requirementId: string, activeAppBaseUrl?: string): Promise<string> {
-  const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
+  const [requirement] = await db.select().from(requirements).where(eq(requirements.id, requirementId));
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
-  const approvedScenarios = db
+  const approvedScenarios = await db
     .select()
     .from(scenarios)
-    .where(and(eq(scenarios.requirementId, requirementId), eq(scenarios.status, "approved_for_generation")))
-    .all();
+    .where(and(eq(scenarios.requirementId, requirementId), eq(scenarios.status, "approved_for_generation")));
   if (approvedScenarios.length === 0) {
     throw new Error("No scenarios approved for generation - approve a grounded plan first.");
   }
 
-  const runId = startAgentRun(db, { agentType: "generator", requirementId, input: { scenarioIds: approvedScenarios.map((s) => s.id) } });
-  db.update(requirements).set({ status: "generating_tests", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+  const runId = await startAgentRun(db, { agentType: "generator", requirementId, input: { scenarioIds: approvedScenarios.map((s) => s.id) } });
+  await db.update(requirements).set({ status: "generating_tests", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
 
   try {
-    updateAgentRunTask(db, runId, "Generating tests");
+    await updateAgentRunTask(db, runId, "Generating tests");
 
     const groundedScenarios = approvedScenarios
       .map((s) => s.groundedPlan as Scenario | null)
@@ -67,7 +66,7 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
 
     const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
     const context = isKnownApp ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
-    const exploration = getLatestExplorationRun(db, requirementId);
+    const exploration = await getLatestExplorationRun(db, requirementId);
     const confirmedTestIds = new Set<string>([
       ...(context ? context.frontend.components.flatMap((c) => c.testIds) : []),
       ...((exploration?.discoveredTestIds as Array<{ testId: string }> | undefined)?.map((t) => t.testId) ?? []),
@@ -92,7 +91,7 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
 
     // Prefer the caller's active URL-config profile (Settings > Environment
     // configuration) over the legacy single testAppUrl setting, then .env.
-    const settings = getPlatformSettings(db, config);
+    const settings = await getPlatformSettings(db, config);
     const testAppUrl = activeAppBaseUrl || settings.testAppUrl || config.appBaseUrl;
 
     const provider = getProvider(config);
@@ -108,19 +107,19 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
       throw new Error(`Generator output failed schema validation: ${JSON.stringify(parsed.error.issues)}`);
     }
 
-    updateAgentRunTask(db, runId, "Validating generated code");
+    await updateAgentRunTask(db, runId, "Validating generated code");
     const validation = validateGeneratedTest(parsed.data.code, confirmedTestIds);
 
-    const priorLatest = db
+    const [priorLatest] = await db
       .select({ version: testFiles.version })
       .from(testFiles)
       .where(eq(testFiles.requirementId, requirementId))
       .orderBy(desc(testFiles.version))
-      .get();
+      .limit(1);
     const nextVersion = (priorLatest?.version ?? 0) + 1;
-    db.update(testFiles).set({ isLatest: false }).where(eq(testFiles.requirementId, requirementId)).run();
+    await db.update(testFiles).set({ isLatest: false }).where(eq(testFiles.requirementId, requirementId));
 
-    const testFileRow = db
+    const [testFileRow] = await db
       .insert(testFiles)
       .values({
         requirementId,
@@ -132,33 +131,31 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
         generatedByAgentRunId: runId,
         isLatest: true,
       })
-      .returning({ id: testFiles.id })
-      .get();
+      .returning({ id: testFiles.id });
 
     for (const t of parsed.data.tests) {
-      db.insert(testFileScenarios)
-        .values({ testFileId: testFileRow.id, scenarioId: t.scenarioId, testTitle: t.testTitle })
-        .run();
+      await db.insert(testFileScenarios).values({ testFileId: testFileRow.id, scenarioId: t.scenarioId, testTitle: t.testTitle });
     }
 
-    db.update(requirements).set({ status: "awaiting_test_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+    await db.update(requirements).set({ status: "awaiting_test_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
 
-    const { approvalMode } = getPlatformSettings(db, config);
+    const { approvalMode } = await getPlatformSettings(db, config);
     let autoCommitted = false;
     if (validation.valid && shouldAutoApprove(approvalMode, "G3_generated_code", true)) {
-      approveTestFile(db, testFileRow.id, "system", "system_auto");
+      await approveTestFile(db, testFileRow.id, "system", "system_auto");
       if (shouldAutoApprove(approvalMode, "G4_commit", true)) {
         await commitApprovedTestFiles(db, config, [testFileRow.id], `Auto-commit: ${requirement.title}`, "system");
+        await triggerAutoRunForCommittedFiles(db, config, [testFileRow.id]);
         autoCommitted = true;
       }
     }
 
-    completeAgentRun(db, runId, { testFileId: testFileRow.id, version: nextVersion, valid: validation.valid, autoCommitted });
+    await completeAgentRun(db, runId, { testFileId: testFileRow.id, version: nextVersion, valid: validation.valid, autoCommitted });
     return testFileRow.id;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    failAgentRun(db, runId, message);
-    db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
+    await failAgentRun(db, runId, message);
+    await db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId));
     throw err;
   }
 }

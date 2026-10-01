@@ -17,14 +17,14 @@ const PIPELINE_STAGES: { key: string; label: string; statuses: RequirementStatus
 export function dashboardRouter(db: Db): Router {
   const router = Router();
 
-  router.get("/summary", (_req, res) => {
-    const allRequirements = db.select().from(requirements).where(eq(requirements.isDeleted, false)).all();
-    const allScenarios = db.select().from(scenarios).where(eq(scenarios.isDeleted, false)).all();
-    const allTestFiles = db.select().from(testFiles).where(eq(testFiles.isLatest, true)).all();
-    const allCommits = db.select().from(gitCommits).all();
-    const allAgentRuns = db.select().from(agentRuns).all();
-    const allTestRuns = db.select().from(testRuns).all();
-    const allBugCases = db.select().from(testRunCases).where(eq(testRunCases.classification, "REAL_DEFECT")).all();
+  router.get("/summary", async (_req, res) => {
+    const allRequirements = await db.select().from(requirements).where(eq(requirements.isDeleted, false));
+    const allScenarios = await db.select().from(scenarios).where(eq(scenarios.isDeleted, false));
+    const allTestFiles = await db.select().from(testFiles).where(eq(testFiles.isLatest, true));
+    const allCommits = await db.select().from(gitCommits);
+    const allAgentRuns = await db.select().from(agentRuns);
+    const allTestRuns = await db.select().from(testRuns);
+    const allBugCases = await db.select().from(testRunCases).where(eq(testRunCases.classification, "REAL_DEFECT"));
 
     const pipeline = PIPELINE_STAGES.map((stage) => ({
       key: stage.key,

@@ -41,10 +41,10 @@ const HISTORY_LIMIT = 1000;
 export function testHistoryRouter(db: Db, _config: Config): Router {
   const router = Router();
 
-  router.get("/", (_req, res) => {
-    const runs = db.select().from(testRuns).orderBy(desc(testRuns.startedAt)).limit(HISTORY_LIMIT).all();
-    const files = db.select().from(testFiles).all();
-    const reqs = db.select().from(requirements).all();
+  router.get("/", async (_req, res) => {
+    const runs = await db.select().from(testRuns).orderBy(desc(testRuns.startedAt)).limit(HISTORY_LIMIT);
+    const files = await db.select().from(testFiles);
+    const reqs = await db.select().from(requirements);
 
     const fileById = new Map(files.map((f) => [f.id, f]));
     const requirementById = new Map(reqs.map((r) => [r.id, r]));

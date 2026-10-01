@@ -1,11 +1,9 @@
 import { Router } from "express";
-import { desc, inArray } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { gitCommits, testFiles } from "../db/schema.js";
-import { getRepoStatus, getCommitHistory, commitApprovedTestFiles } from "../git/managedRepo.js";
-import { runPlaywrightTest } from "../execution/runTests.js";
-import { getPlatformSettings } from "../settings/settingsService.js";
+import { gitCommits } from "../db/schema.js";
+import { getRepoStatus, getCommitHistory, commitApprovedTestFiles, triggerAutoRunForCommittedFiles } from "../git/managedRepo.js";
 
 export function gitRouter(db: Db, config: Config): Router {
   const router = Router();
@@ -23,7 +21,7 @@ export function gitRouter(db: Db, config: Config): Router {
       const limit = req.query.limit ? Number(req.query.limit) : 50;
       // Prefer our DB record (has the requirement/test-file traceability the
       // dashboard needs) but fall back to raw git log for repo-level history.
-      const dbCommits = db.select().from(gitCommits).orderBy(desc(gitCommits.committedAt)).limit(limit).all();
+      const dbCommits = await db.select().from(gitCommits).orderBy(desc(gitCommits.committedAt)).limit(limit);
       const rawLog = await getCommitHistory(config, limit);
       res.json({ commits: dbCommits, rawLog });
     } catch (err) {
@@ -71,22 +69,7 @@ export function gitRouter(db: Db, config: Config): Router {
       // "Commit to Git -> CI/CD runs the code -> report appears in the
       // dashboard": fire-and-forget so the commit response isn't held up by
       // a real browser test run. The client polls GET /api/test-runs.
-      // Same DB-persisted testAppUrl the Generator/Planner use, rather than
-      // silently falling all the way back to config.appBaseUrl (.env,
-      // typically the platform's own localhost address).
-      const { testAppUrl } = getPlatformSettings(db, config);
-      const autoRunRows = db
-        .select({ id: testFiles.id, autoRunOnCommit: testFiles.autoRunOnCommit })
-        .from(testFiles)
-        .where(inArray(testFiles.id, testFileIds))
-        .all();
-      const autoRunIds = new Set(autoRunRows.filter((r) => r.autoRunOnCommit).map((r) => r.id));
-      for (const id of testFileIds) {
-        if (!autoRunIds.has(id)) continue;
-        runPlaywrightTest(db, config, id, "auto_after_commit", testAppUrl).catch((err) => {
-          console.error(`Auto test run failed for test file ${id}:`, err);
-        });
-      }
+      await triggerAutoRunForCommittedFiles(db, config, testFileIds);
 
       return res.status(statusCode).json(responseBody);
     } catch (err) {

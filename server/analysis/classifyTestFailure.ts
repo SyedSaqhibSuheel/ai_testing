@@ -21,22 +21,21 @@ function extractJson(text: string): unknown {
  * REAL_DEFECT, per explicit instruction in the system prompt.
  */
 export async function classifyTestFailure(db: Db, config: Config, testRunCaseId: string): Promise<void> {
-  const testCase = db.select().from(testRunCases).where(eq(testRunCases.id, testRunCaseId)).get();
+  const [testCase] = await db.select().from(testRunCases).where(eq(testRunCases.id, testRunCaseId));
   if (!testCase || !testCase.errorMessage) return;
 
-  const run = db.select().from(testRuns).where(eq(testRuns.id, testCase.testRunId)).get();
+  const [run] = await db.select().from(testRuns).where(eq(testRuns.id, testCase.testRunId));
   if (!run) return;
-  const file = db.select().from(testFiles).where(eq(testFiles.id, run.testFileId)).get();
+  const [file] = await db.select().from(testFiles).where(eq(testFiles.id, run.testFileId));
   if (!file) return;
-  const requirement = db.select().from(requirements).where(eq(requirements.id, file.requirementId)).get();
+  const [requirement] = await db.select().from(requirements).where(eq(requirements.id, file.requirementId));
   if (!requirement) return;
 
-  const mapping = db
+  const [mapping] = await db
     .select()
     .from(testFileScenarios)
-    .where(and(eq(testFileScenarios.testFileId, file.id), eq(testFileScenarios.testTitle, testCase.title)))
-    .get();
-  const scenario = mapping ? db.select().from(scenarios).where(eq(scenarios.id, mapping.scenarioId)).get() : undefined;
+    .where(and(eq(testFileScenarios.testFileId, file.id), eq(testFileScenarios.testTitle, testCase.title)));
+  const [scenario] = mapping ? await db.select().from(scenarios).where(eq(scenarios.id, mapping.scenarioId)) : [undefined];
   const groundedPlan = scenario?.groundedPlan as GroundedPlan | null | undefined;
 
   const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
@@ -79,7 +78,8 @@ export async function classifyTestFailure(db: Db, config: Config, testRunCaseId:
     };
   }
 
-  db.update(testRunCases)
+  await db
+    .update(testRunCases)
     .set({
       classification: result.classification,
       classificationConfidence: result.confidence,
@@ -88,6 +88,5 @@ export async function classifyTestFailure(db: Db, config: Config, testRunCaseId:
       classificationReasoning: result.reasoning,
       suggestedFix: result.suggestedFix,
     })
-    .where(eq(testRunCases.id, testRunCaseId))
-    .run();
+    .where(eq(testRunCases.id, testRunCaseId));
 }

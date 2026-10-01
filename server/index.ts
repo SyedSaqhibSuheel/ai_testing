@@ -18,7 +18,7 @@ import { codeAnalysisRouter } from "./routes/codeAnalysis.js";
 import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
-const db = createDb(config.dbPath);
+const db = createDb(config.databaseUrl);
 const urlConfigService = new URLConfigService(db, {
   defaultAppBaseUrl: config.appBaseUrl,
   defaultApiBaseUrl: config.apiBaseUrl,

@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "AI Testing Platform",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "ai_testing",
+      "Username": "ai_testing",
+      "SSLMode": "prefer"
+    }
+  }
+}
