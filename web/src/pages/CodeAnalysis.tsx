@@ -44,19 +44,35 @@ export function CodeAnalysis() {
                 (approve scenarios, ground them against the live app, generate Playwright tests).
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="secondary"
-                onClick={() => run.mutate(true)}
-                disabled={running || run.isPending}
-                title="Re-analyze every module, including ones already analyzed"
-              >
-                Re-analyze all
-              </Button>
-              <Button onClick={() => run.mutate(false)} disabled={running || run.isPending || analyzedCount === modules.length}>
-                {running ? "Analyzing..." : "Analyze remaining modules"}
-              </Button>
-            </div>
+           <div className="flex gap-2 shrink-0">
+  <Button
+    variant="secondary"
+    onClick={() => run.mutate(true)}
+    disabled={running || run.isPending}
+    title="Re-analyze every module, including ones already analyzed"
+  >
+    Re-analyze all
+  </Button>
+
+  <Button
+    onClick={() => run.mutate(false)}
+    disabled={running || run.isPending || analyzedCount === modules.length}
+  >
+    {running ? "Analyzing..." : "Analyze remaining modules"}
+  </Button>
+
+  <Button
+    onClick={async () => {
+      try {
+        await api.runAllTests();
+      } catch (error) {
+        console.error("Failed to run all tests:", error);
+      }
+    }}
+  >
+    Save & Run All
+  </Button>
+</div>
           </div>
           {run.isError && <p className="text-xs text-fail mt-3">{(run.error as Error).message}</p>}
           {running && (
