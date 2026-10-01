@@ -110,6 +110,11 @@ export interface GroundedPlan {
   expectedBackendCalls: { method: string; path: string; expectedStatus?: number }[];
   expectedUiOutcomes: string[];
   passCriteria: string[];
+  // false when live exploration found no UI-reachable path to this
+  // scenario's precondition - the generated test is a test.skip(reason)
+  // instead of steps that would always fail.
+  groundable?: boolean;
+  ungroundableReason?: string;
 }
 
 export interface Scenario {
@@ -141,6 +146,14 @@ export interface DiscoveredTestId {
   source: "static" | "live" | "both";
 }
 
+/** One entry per scenario explored: the real, live-verified steps to reach its precondition, or why no such path exists. */
+export interface ScenarioPath {
+  scenarioTitle: string;
+  reachable: boolean;
+  steps: { action: string; testId?: string; route?: string; inputValue?: string }[];
+  unreachableReason?: string;
+}
+
 export interface ExplorationRun {
   id: string;
   requirementId: string;
@@ -148,6 +161,7 @@ export interface ExplorationRun {
   discoveredTestIds: DiscoveredTestId[];
   discoveredFlows: string[];
   crossReferenceNotes: string[];
+  scenarioPaths: ScenarioPath[];
   screenshotPaths: string[];
   status: "running" | "completed" | "failed" | "timeout";
   startedAt: string;

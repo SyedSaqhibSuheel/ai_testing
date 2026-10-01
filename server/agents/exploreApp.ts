@@ -6,12 +6,13 @@ import type { TranscriptTurn } from "../../src/schemas/scenarioResult.js";
 import { ExplorationFindingsSchema, type ExplorationFindings } from "../schemas/exploration.js";
 import { buildExploreSystemPrompt, buildExploreUserPrompt } from "./explorePrompts.js";
 
-// Cataloguing is cheaper than executing+asserting, so fewer turns than
-// scenario execution's 40. The wall clock must still outlast
+// Now drives real interaction per scenario (not just cataloguing) to find
+// each one's live-reachable precondition path, so this needs closer to
+// scenario execution's own 40-turn budget. The wall clock must still outlast
 // withRateLimitRetry: a single free-tier 429 can wait ~4 x 22s, which alone
 // used to exhaust a 120s budget and save an empty (routes/flows: none) run.
-const MAX_TURNS = 25;
-const WALL_CLOCK_TIMEOUT_MS = 300_000;
+const MAX_TURNS = 40;
+const WALL_CLOCK_TIMEOUT_MS = 420_000;
 
 export interface CapturedImage {
   turn: number;
@@ -28,7 +29,7 @@ export interface ExploreAppOutput {
 }
 
 function timeoutFindings(reason: string): ExplorationFindings {
-  return { summary: reason, discoveredRoutes: [], discoveredTestIds: [], discoveredFlows: [], crossReferenceNotes: [] };
+  return { summary: reason, discoveredRoutes: [], discoveredTestIds: [], discoveredFlows: [], crossReferenceNotes: [], scenarioPaths: [] };
 }
 
 // browser_snapshot is an accessibility tree - it never shows data-testid

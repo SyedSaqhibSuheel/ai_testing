@@ -21,13 +21,34 @@ export interface FrontendModule {
 }
 
 /**
+ * Whether some OTHER real (non-demo) source file actually imports this
+ * component - i.e. it's mounted somewhere reachable in the running app,
+ * not just referenced from a components/examples/ storybook-style wrapper.
+ * A component nobody imports outside of its own demo file can never be
+ * reached by `page.goto(...)` in a real browser, so a generated E2E test
+ * for it would fail every time regardless of the app's actual correctness.
+ */
+function isReachableFromApp(file: string, allSourceFiles: string[]): boolean {
+  const sep = path.sep;
+  const componentName = path.basename(file, path.extname(file));
+  const importPattern = new RegExp(`[/'"]${componentName}["']`);
+  return allSourceFiles.some((other) => {
+    if (other === file) return false;
+    if (other.includes(`${sep}components${sep}examples${sep}`)) return false;
+    return importPattern.test(readFileSync(other, "utf-8"));
+  });
+}
+
+/**
  * The real, product-specific screens/components of the CallCenterUI app -
  * deliberately narrower than "every .tsx under frontendSrcDir": excludes
  * components/ui (generic shadcn primitives with no call-center-specific
- * behavior) and components/examples (storybook-style demo wrappers, not
- * real app screens). This is the whole point of Code Analysis: it should
- * only ever describe the actual call center product, never the shared
- * fidar-server backend or generic UI kit.
+ * behavior), components/examples (storybook-style demo wrappers, not real
+ * app screens), and any component that only that demo wrapper imports (i.e.
+ * never actually mounted by a real page - see isReachableFromApp above).
+ * This is the whole point of Code Analysis: it should only ever describe
+ * the actual call center product, never the shared fidar-server backend,
+ * generic UI kit, or orphaned/demo-only components.
  */
 function listFrontendModules(config: Config): FrontendModule[] {
   const sep = path.sep;
@@ -40,10 +61,13 @@ function listFrontendModules(config: Config): FrontendModule[] {
       !f.includes(`${sep}components${sep}examples${sep}`)
   );
 
+  const allSourceFiles = walkFiles(config.frontendSrcDir, (f) => f.endsWith(".tsx") || f.endsWith(".ts"));
+  const reachableFiles = files.filter((file) => isReachableFromApp(file, allSourceFiles));
+
   const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
   const testIdsByFile = new Map(context.frontend.components.map((c) => [c.file, c.testIds]));
 
-  return files
+  return reachableFiles
     .map((file) => ({
       file,
       componentName: path.basename(file, path.extname(file)),
