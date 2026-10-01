@@ -241,7 +241,7 @@ export function URLConfigPanel() {
                   setUrlInput(e.target.value);
                   if (formErrors.url) setFormErrors({ ...formErrors, url: undefined });
                 }}
-                placeholder="e.g., https://callcenter.fidar.io"
+                placeholder="e.g., https://app.example.com"
                 className={`w-full bg-panel-2 border rounded px-3 py-2 text-sm transition-colors ${
                   formErrors.url ? "border-red-500" : "border-border"
                 }`}

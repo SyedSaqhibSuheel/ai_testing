@@ -15,6 +15,7 @@ import { URLConfigService } from "./config/urlConfigService.js";
 import { testRunsRouter, runTestRouter } from "./routes/testRuns.js";
 import { testHistoryRouter } from "./routes/testHistory.js";
 import { codeAnalysisRouter } from "./routes/codeAnalysis.js";
+import { codeAnalysisWorkflowRouter } from "./routes/codeAnalysisWorkflow.js";
 import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
@@ -45,6 +46,10 @@ app.use("/api/test-runs", testRunsRouter(db, config, urlConfigService));
 app.use("/api/test-history", testHistoryRouter(db, config));
 app.use("/api/dashboard", dashboardRouter(db));
 app.use("/api/code-analysis", codeAnalysisRouter(db, config));
+// Cross-cutting source features + one-click pipeline for the Code Analysis
+// page. Mounted after codeAnalysisRouter, whose paths (/modules, /run) don't
+// overlap /features or /pipeline, so those requests fall through to here.
+app.use("/api/code-analysis", codeAnalysisWorkflowRouter(db, config, urlConfigService));
 app.use("/api/url-config", createUrlConfigRouter(db, config));
 
 // Screenshots/traces from test runs. Mounted at the repo root (not

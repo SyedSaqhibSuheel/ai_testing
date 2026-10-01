@@ -2,7 +2,7 @@ import type { NetworkLogEntry } from "../schemas/scenarioResult.js";
 
 // Matches @playwright/mcp's browser_network_requests text output, lines like:
 //   "1. [GET] http://localhost:5000/ => [FAILED] net::ERR_CONNECTION_REFUSED"
-//   "6. [GET] https://callcenter.fidar.io/logo.png => [404]"
+//   "6. [GET] https://app.example.com/logo.png => [404]"
 const LINE_PATTERN = /^\s*\d+\.\s*\[(\w+)\]\s+(\S+)\s*=>\s*\[(FAILED|\d+)\](?:\s+(.*))?$/;
 
 /**

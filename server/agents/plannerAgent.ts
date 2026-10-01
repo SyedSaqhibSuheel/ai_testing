@@ -16,6 +16,7 @@ import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } fro
 import { getPlatformSettings } from "../settings/settingsService.js";
 import { shouldAutoApprove } from "../approval/gate.js";
 import { approveScenario } from "../scenarios/scenarioTransitions.js";
+import { isConfirmedTestId } from "./validateTestSyntax.js";
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -28,11 +29,16 @@ function mergeTestIdSources(
   liveTestIds: Array<{ testId: string; component?: string }>,
   staticTestIds: Set<string>
 ): DiscoveredTestId[] {
-  const liveSet = new Set(liveTestIds.map((t) => t.testId));
-  const merged: DiscoveredTestId[] = liveTestIds.map((t) => ({
+  // The explorer is an LLM self-reporting what it saw and does invent
+  // plausible ids (e.g. "input-username" on a login form that has none).
+  // With real source available, drop any live id the source doesn't render,
+  // so the grounding step can't bake it into an approved plan.
+  const trustedLive = staticTestIds.size > 0 ? liveTestIds.filter((t) => isConfirmedTestId(t.testId, staticTestIds)) : liveTestIds;
+  const liveSet = new Set(trustedLive.map((t) => t.testId));
+  const merged: DiscoveredTestId[] = trustedLive.map((t) => ({
     testId: t.testId,
     component: t.component,
-    source: staticTestIds.has(t.testId) ? "both" : "live",
+    source: staticTestIds.size > 0 ? "both" : "live",
   }));
   for (const testId of staticTestIds) {
     if (!liveSet.has(testId)) merged.push({ testId, source: "static" });
@@ -71,6 +77,19 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
   const relevant = context ? selectRelevantContext(requirement.rawText, context) : EMPTY_CONTEXT;
   const provider = getProvider(config);
 
+  // CallCenterUI's own login credentials only apply when the active target
+  // IS CallCenterUI - a different site's login has nothing to do with them.
+  const login =
+    isKnownApp && config.appLoginUsername && config.appLoginPassword
+      ? {
+          username: config.appLoginUsername,
+          password: config.appLoginPassword,
+          usernameLocator: config.appLoginUsernameLocator,
+          passwordLocator: config.appLoginPasswordLocator,
+          submitLocator: config.appLoginSubmitLocator,
+        }
+      : undefined;
+
   let explorationId: string | undefined;
   const mcpSession = await startPlaywrightMcp(config.rootDir, config.mcpHeadless);
 
@@ -83,11 +102,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
       approvedScenarios.map((s) => ({ title: s.title, preconditions: s.preconditions as string[] })),
       relevant,
       targetAppUrl,
-      // CallCenterUI's own login credentials only apply when the active target
-      // IS CallCenterUI - a different site's login has nothing to do with them.
-      isKnownApp && config.appLoginUsername && config.appLoginPassword
-        ? { username: config.appLoginUsername, password: config.appLoginPassword }
-        : undefined
+      login
     );
 
     const screenshotDir = path.join(config.rootDir, "data", "explorations", runId);
@@ -130,7 +145,8 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
         expectedResult: s.expectedResult,
       })),
       explored.findings,
-      relevant
+      relevant,
+      login
     );
 
     const chatResult = await provider.chat([{ role: "system", text: groundSystem }, { role: "user", text: groundUser }], []);
@@ -141,6 +157,20 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
 
     const { approvalMode } = getPlatformSettings(db, config);
     const autoApproveG2 = shouldAutoApprove(approvalMode, "G2_grounded_plan", true);
+
+    // Never let a made-up testid reach plan review looking legitimate: strip
+    // any step testid that was neither seen in the live DOM nor in the source
+    // scan, and say so on the step so the reviewer sees the gap.
+    const confirmedTestIds = new Set<string>([...staticTestIds, ...explored.findings.discoveredTestIds.map((t) => t.testId)]);
+    for (const plan of parsed.data.plans) {
+      for (const step of plan.steps) {
+        if (step.targetTestId && !isConfirmedTestId(step.targetTestId, confirmedTestIds)) {
+          const gap = `UNCONFIRMED testid "${step.targetTestId}" removed - not found in the live app or source scan.`;
+          step.notes = step.notes ? `${gap} ${step.notes}` : gap;
+          delete step.targetTestId;
+        }
+      }
+    }
 
     const plansById = new Map(parsed.data.plans.map((p) => [p.id, p]));
     for (const s of approvedScenarios) {

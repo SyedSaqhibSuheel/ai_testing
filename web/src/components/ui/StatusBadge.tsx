@@ -40,12 +40,19 @@ const COLOR_MAP: Record<string, string> = {
   INCONCLUSIVE: "bg-panel-2 text-muted border-border",
 };
 
+// syntax_valid/syntax_invalid cover the whole generated-code check (syntax,
+// duplicate titles, unconfirmed testids), not just syntax.
+const DEFAULT_LABELS: Record<string, string> = {
+  syntax_valid: "validated",
+  syntax_invalid: "validation failed",
+};
+
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const classes = COLOR_MAP[status] ?? "bg-panel-2 text-muted border-border";
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${classes}`}>
       <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {label ?? status.replace(/_/g, " ")}
+      {label ?? DEFAULT_LABELS[status] ?? status.replace(/_/g, " ")}
     </span>
   );
 }

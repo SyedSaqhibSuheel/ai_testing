@@ -29,6 +29,18 @@ test("checkLocatorHallucination still rejects a testid matching no known pattern
   assert.match(result.error ?? "", /button-totally-made-up/);
 });
 
+test("checkLocatorHallucination accepts a concrete instance of a prefix* dynamic testid", () => {
+  const confirmedTestIds = new Set<string>(["button-request-*"]);
+  const code = `
+    import { test, expect } from "@playwright/test";
+    test("x", async ({ page }) => {
+      await page.getByTestId("button-request-42").click();
+    });
+  `;
+  const result = checkLocatorHallucination(code, confirmedTestIds);
+  assert.equal(result.valid, true, result.error);
+});
+
 test("checkLocatorHallucination still accepts an exact static match", () => {
   const confirmedTestIds = new Set<string>(["tab-database"]);
   const code = `

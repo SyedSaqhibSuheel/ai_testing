@@ -31,6 +31,47 @@ function timeoutFindings(reason: string): ExplorationFindings {
   return { summary: reason, discoveredRoutes: [], discoveredTestIds: [], discoveredFlows: [], crossReferenceNotes: [] };
 }
 
+// browser_snapshot is an accessibility tree - it never shows data-testid
+// attributes, so testids the model "reports" are guesses (e.g. inventing
+// input-username/button-sign-in for a login form that has none). Instead,
+// read them straight off the DOM after each turn and treat that as the only
+// source of truth for live testids.
+const HARVEST_TESTIDS_FN =
+  "() => 'TESTIDS@' + location.pathname + '::' + [...new Set([...document.querySelectorAll('[data-testid]')].map((e) => e.getAttribute('data-testid')))].join('|') + '::END'";
+const HARVEST_RESULT_RE = /TESTIDS@(.*?)::(.*?)::END/;
+
+async function harvestDomTestIds(mcpSession: PlaywrightMcpSession, into: Map<string, string>): Promise<boolean> {
+  try {
+    const { text, isError } = await mcpSession.callTool("browser_evaluate", { function: HARVEST_TESTIDS_FN });
+    const match = !isError && text.match(HARVEST_RESULT_RE);
+    if (!match) return false;
+    const [, pathname, joined] = match;
+    for (const testId of joined.split("|").filter(Boolean)) {
+      if (!into.has(testId)) into.set(testId, pathname);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Replaces the model-reported testids with the ones actually found in the DOM. */
+function reconcileTestIds(findings: ExplorationFindings, domTestIds: Map<string, string>, harvestSucceeded: boolean): ExplorationFindings {
+  const reported = new Map(findings.discoveredTestIds.map((t) => [t.testId, t.component]));
+  const unverified = [...reported.keys()].filter((t) => !domTestIds.has(t));
+  const notes = [...findings.crossReferenceNotes];
+  if (!harvestSucceeded && reported.size > 0) {
+    notes.push(`Could not read data-testids from the live DOM - discarded ${reported.size} model-reported testid(s) as unverifiable.`);
+  } else if (unverified.length > 0) {
+    notes.push(`Discarded model-reported testid(s) not present in the live DOM: ${unverified.join(", ")}`);
+  }
+  return {
+    ...findings,
+    discoveredTestIds: [...domTestIds].map(([testId, pathname]) => ({ testId, component: reported.get(testId) ?? `page ${pathname}` })),
+    crossReferenceNotes: notes,
+  };
+}
+
 export async function exploreApp(
   provider: LlmProvider,
   mcpSession: PlaywrightMcpSession,
@@ -49,12 +90,21 @@ export async function exploreApp(
     { role: "user", text: buildExploreUserPrompt(requirementText, approvedScenarios, context) },
   ];
 
+  const domTestIds = new Map<string, string>();
+  let harvestSucceeded = false;
+  const finish = (findings: ExplorationFindings, status: ExploreAppOutput["status"]): ExploreAppOutput => ({
+    findings: reconcileTestIds(findings, domTestIds, harvestSucceeded),
+    status,
+    transcript,
+    images,
+  });
+
   const startedAt = Date.now();
   let turn = 0;
 
   while (turn < MAX_TURNS) {
     if (Date.now() - startedAt > WALL_CLOCK_TIMEOUT_MS) {
-      return { findings: timeoutFindings(`Wall-clock timeout after ${WALL_CLOCK_TIMEOUT_MS}ms.`), status: "timeout", transcript, images };
+      return finish(timeoutFindings(`Wall-clock timeout after ${WALL_CLOCK_TIMEOUT_MS}ms.`), "timeout");
     }
 
     const isLastAllowedTurn = turn === MAX_TURNS - 1;
@@ -69,14 +119,12 @@ export async function exploreApp(
     if (reportCall) {
       const parsed = ExplorationFindingsSchema.safeParse(reportCall.input);
       if (parsed.success) {
-        return { findings: parsed.data, status: "completed", transcript, images };
+        return finish(parsed.data, "completed");
       }
-      return {
-        findings: timeoutFindings(`Model's report_exploration_findings call did not match the expected schema: ${JSON.stringify(parsed.error.issues)}`),
-        status: "completed",
-        transcript,
-        images,
-      };
+      return finish(
+        timeoutFindings(`Model's report_exploration_findings call did not match the expected schema: ${JSON.stringify(parsed.error.issues)}`),
+        "completed"
+      );
     }
 
     if (turnResult.toolCalls.length === 0) {
@@ -103,7 +151,9 @@ export async function exploreApp(
         messages.push({ role: "tool", toolCallId: call.id, toolResultText: `ERROR: ${errorText}`, toolIsError: true });
       }
     }
+
+    if (await harvestDomTestIds(mcpSession, domTestIds)) harvestSucceeded = true;
   }
 
-  return { findings: timeoutFindings(`Turn cap (${MAX_TURNS}) reached without a report_exploration_findings call.`), status: "timeout", transcript, images };
+  return finish(timeoutFindings(`Turn cap (${MAX_TURNS}) reached without a report_exploration_findings call.`), "timeout");
 }
