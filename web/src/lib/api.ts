@@ -89,7 +89,6 @@ listApplications: () =>
   request<{
     status: string;
     testFileCount: number;
-    runIds: string[];
    }>("/test-files/run-all", {
     method: "POST",
   }),
