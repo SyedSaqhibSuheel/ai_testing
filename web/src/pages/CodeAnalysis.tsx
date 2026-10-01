@@ -134,6 +134,17 @@ export function CodeAnalysis() {
               <Button onClick={() => run.mutate(false)} disabled={running || run.isPending || analyzedCount === totalCount}>
                 {running ? "Analyzing..." : "Analyze remaining modules"}
               </Button>
+              <Button
+                onClick={async () => {
+                  try {
+                    await api.runAllTests();
+                  } catch (error) {
+                    console.error("Failed to run all tests:", error);
+                  }
+                }}
+              >
+                Save & Run All
+              </Button>
             </div>
           </div>
           {run.isError && <p className="text-xs text-fail mt-3">{(run.error as Error).message}</p>}

@@ -58,8 +58,11 @@ export function Requirements() {
                     )}
                   </div>
                   <div className="text-xs text-muted mt-1">
-                    {r.submittedBy} &middot; {new Date(r.createdAt).toLocaleString()}
-                  </div>
+  {r.submittedBy} &middot; {new Date(r.createdAt).toLocaleString()}
+</div>
+<div className="text-xs text-muted mt-2 line-clamp-2">
+  {r.rawText}
+</div>
                 </div>
                 <StatusBadge status={r.status} />
               </Link>
