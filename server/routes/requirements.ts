@@ -5,6 +5,7 @@ import type { Config } from "../../src/config.js";
 import { requirements, requirementAnalyses, scenarios } from "../db/schema.js";
 import { runIntelligenceAgent } from "../agents/intelligenceAgent.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
+import { getActiveApplication } from "../config/activeApplication.js";
 
 export function requirementsRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
@@ -26,6 +27,7 @@ export function requirementsRouter(db: Db, config: Config, urlConfigService?: UR
         title: typeof title === "string" && title.trim() ? title.trim() : rawText.slice(0, 80),
         rawText: rawText.trim(),
         submittedBy: typeof submittedBy === "string" && submittedBy.trim() ? submittedBy.trim() : "unknown",
+        applicationId: getActiveApplication(db)?.id,
       })
       .returning()
       .get();

@@ -54,28 +54,39 @@ export function testRunsRouter(db: Db, config: Config, urlConfigService?: URLCon
     );
   }
 
-  const enrichedRows = rows.map((run) => {
-  const testCases = db
-    .select({
-      testCaseId: testFileScenarios.scenarioId,
-      testTitle: testFileScenarios.testTitle,
-      scenarioTitle: scenarios.title,
-    })
-    .from(testFileScenarios)
-    .innerJoin(
-      scenarios,
-      eq(testFileScenarios.scenarioId, scenarios.id),
-    )
-    .where(eq(testFileScenarios.testFileId, run.testFileId))
-    .all();
+  // Batched instead of one query per run - with "Save & Run All" firing a
+  // run per committed file, this list can have dozens of rows on every poll.
+  const testFileIds = [...new Set(rows.map((run) => run.testFileId))];
+  const testCaseRows = testFileIds.length
+    ? db
+        .select({
+          testFileId: testFileScenarios.testFileId,
+          testCaseId: testFileScenarios.scenarioId,
+          testTitle: testFileScenarios.testTitle,
+          scenarioTitle: scenarios.title,
+        })
+        .from(testFileScenarios)
+        .innerJoin(
+          scenarios,
+          eq(testFileScenarios.scenarioId, scenarios.id),
+        )
+        .where(inArray(testFileScenarios.testFileId, testFileIds))
+        .all()
+    : [];
 
-  return {
+  const testCasesByFile = new Map<string, typeof testCaseRows>();
+  for (const row of testCaseRows) {
+    const list = testCasesByFile.get(row.testFileId);
+    if (list) list.push(row);
+    else testCasesByFile.set(row.testFileId, [row]);
+  }
+
+  const enrichedRows = rows.map((run) => ({
     ...run,
-    testCases,
-  };
-});
+    testCases: testCasesByFile.get(run.testFileId) ?? [],
+  }));
 
-res.json(enrichedRows);
+  res.json(enrichedRows);
 });
 
   router.get("/:id", (req, res) => {

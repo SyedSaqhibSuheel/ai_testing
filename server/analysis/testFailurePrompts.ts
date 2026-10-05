@@ -1,7 +1,9 @@
-export function buildTestFailureSystemPrompt(): string {
+import { describeApp } from "../agents/appDescriptor.js";
+
+export function buildTestFailureSystemPrompt(appName?: string, appDescription?: string): string {
   return [
     "MOCK_TASK: test_failure_classify",
-    "You are a QA triage engineer for a banking helpdesk web app (React frontend + Spring Boot API). A generated Playwright test just failed a real, deterministic run (no AI was involved in running it - this is the real Playwright test runner). Classify why, using this exact decision procedure, checked IN ORDER:",
+    `You are a QA triage engineer for ${describeApp(appName, appDescription)}. A generated Playwright test just failed a real, deterministic run (no AI was involved in running it - this is the real Playwright test runner). Classify why, using this exact decision procedure, checked IN ORDER:`,
     "",
     "1. ENVIRONMENT_ERROR - a connection-refused/timeout/DNS failure, or the error indicates the app under test was simply unreachable/down. Check this FIRST: these must never be classified as REAL_DEFECT.",
     "2. TEST_SCRIPT_ERROR - the test's own code is wrong independent of the app (e.g. it asserts something the ORIGINAL REQUIREMENT never actually implied, references a route/precondition that doesn't fit the app's real navigation flow, or has an obvious logic bug).",

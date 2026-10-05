@@ -4,7 +4,7 @@ import type { Config } from "../../src/config.js";
 import { requirements, scenarios, approvalAuditLog } from "../db/schema.js";
 import { buildContext } from "../../src/context/buildContext.js";
 import { selectRelevantContext, type RelevantContext } from "../../src/context/selectRelevantContext.js";
-import { isKnownAppUrl } from "../config/appProfile.js";
+import { resolveAppConfig, hasSourceAccess } from "../config/activeApplication.js";
 import { getProvider } from "../../src/llm/index.js";
 import { IntelligenceAnalysisSchema, type IntelligenceAnalysis } from "../schemas/analysis.js";
 import { buildIntelligenceSystemPrompt, buildIntelligenceUserPrompt, buildRegenerateUserPrompt } from "./intelligencePrompts.js";
@@ -18,13 +18,13 @@ function extractJson(text: string): unknown {
 
 const EMPTY_CONTEXT: RelevantContext = { controllers: [], dtos: [], components: [], routes: [] };
 
-async function callIntelligenceLlm(config: Config, requirementText: string, isKnownApp: boolean): Promise<IntelligenceAnalysis> {
-  const relevant = isKnownApp
+async function callIntelligenceLlm(config: Config, requirementText: string, hasSource: boolean): Promise<IntelligenceAnalysis> {
+  const relevant = hasSource
     ? selectRelevantContext(requirementText, buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir))
     : EMPTY_CONTEXT;
   const provider = getProvider(config);
 
-  const system = buildIntelligenceSystemPrompt();
+  const system = buildIntelligenceSystemPrompt(config.applicationName, config.applicationDescription);
   const user = buildIntelligenceUserPrompt(requirementText, relevant);
 
   const attempt = async (extra?: string) => {
@@ -58,6 +58,7 @@ async function callIntelligenceLlm(config: Config, requirementText: string, isKn
  * ground scenarios against the live app - that's the Planner's job.
  */
 export async function runIntelligenceAgent(db: Db, config: Config, requirementId: string, activeAppBaseUrl?: string): Promise<void> {
+  config = resolveAppConfig(db, config);
   const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
@@ -66,8 +67,7 @@ export async function runIntelligenceAgent(db: Db, config: Config, requirementId
 
   try {
     updateAgentRunTask(db, runId, "Analyzing");
-    const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
-    const analysis = await callIntelligenceLlm(config, requirement.rawText, isKnownApp);
+    const analysis = await callIntelligenceLlm(config, requirement.rawText, hasSourceAccess(config));
 
     const { analysisId, scenarioCount } = persistIntelligenceAnalysis(db, config, requirementId, runId, analysis);
 
@@ -93,11 +93,12 @@ export async function regenerateScenario(
   feedback?: string,
   activeAppBaseUrl?: string
 ): Promise<string> {
+  config = resolveAppConfig(db, config);
   const scenario = db.select().from(scenarios).where(eq(scenarios.id, scenarioId)).get();
   if (!scenario) throw new Error(`Scenario ${scenarioId} not found`);
   const requirement = db.select().from(requirements).where(eq(requirements.id, scenario.requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${scenario.requirementId} not found`);
-  const isKnownApp = isKnownAppUrl(activeAppBaseUrl ?? config.appBaseUrl, config);
+  const hasSource = hasSourceAccess(config);
 
   const runId = startAgentRun(db, {
     agentType: "intelligence",
@@ -108,14 +109,14 @@ export async function regenerateScenario(
   updateAgentRunTask(db, runId, "Analyzing");
 
   try {
-    const relevant = isKnownApp
+    const relevant = hasSource
       ? selectRelevantContext(requirement.rawText, buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir))
       : EMPTY_CONTEXT;
     const provider = getProvider(config);
 
     const result = await provider.chat(
       [
-        { role: "system", text: buildIntelligenceSystemPrompt() },
+        { role: "system", text: buildIntelligenceSystemPrompt(config.applicationName, config.applicationDescription) },
         {
           role: "user",
           text: `${buildRegenerateUserPrompt(requirement.rawText, scenario, feedback)}\n\n${buildIntelligenceUserPrompt(requirement.rawText, relevant)}`,

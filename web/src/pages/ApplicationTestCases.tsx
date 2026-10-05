@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/Card";
@@ -33,6 +33,10 @@ const [runningTestFileId, setRunningTestFileId] = useState<string | null>(null);
   queryKey: ["test-runs", "application", id],
   queryFn: () => api.listTestRuns({ applicationId: id! }),
   enabled: Boolean(id),
+  // Keeps the Execution History live while any run started here (e.g. by
+  // "Save & Run All") is still in flight, instead of freezing on "Running"
+  // until the user manually reloads the page.
+  refetchInterval: (query) => (query.state.data?.some((r) => r.status === "running") ? 2000 : false),
 });
 
 const {
@@ -42,6 +46,14 @@ const {
   queryKey: ["test-run", selectedRunId],
   queryFn: () => api.getTestRun(selectedRunId!),
   enabled: Boolean(selectedRunId),
+  refetchInterval: (query) => (query.state.data?.run.status === "running" ? 2000 : false),
+});
+
+const runAll = useMutation({
+  mutationFn: api.runAllTests,
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["test-runs"] });
+  },
 });
 
 const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
@@ -121,19 +133,19 @@ const runsByDate = (testRuns ?? []).reduce<Record<string, typeof testRuns>>(
     </p>
   </div>
 
-  <button
-    type="button"
-    onClick={async () => {
-      try {
-        await api.runAllTests();
-      } catch (error) {
-        console.error("Failed to run all tests:", error);
-      }
-    }}
-    className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-  >
-    Save & Run All
-  </button>
+  <div className="flex flex-col items-end gap-1">
+    <button
+      type="button"
+      onClick={() => runAll.mutate()}
+      disabled={runAll.isPending}
+      className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+    >
+      {runAll.isPending ? "Running..." : "Save & Run All"}
+    </button>
+    {runAll.isError && (
+      <p className="text-xs text-red-400">{(runAll.error as Error).message}</p>
+    )}
+  </div>
 </div>
 
         {scenariosLoading && (

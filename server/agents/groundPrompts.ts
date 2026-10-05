@@ -1,10 +1,11 @@
 import type { RelevantContext } from "../../src/context/selectRelevantContext.js";
 import type { ExplorationFindings } from "../schemas/exploration.js";
+import { describeApp } from "./appDescriptor.js";
 
-export function buildGroundSystemPrompt(): string {
+export function buildGroundSystemPrompt(appName?: string, appDescription?: string): string {
   return [
     "MOCK_TASK: ground",
-    "You are a QA engineer turning approved draft test scenarios into a concrete, grounded Playwright test plan for a banking helpdesk web app.",
+    `You are a QA engineer turning approved draft test scenarios into a concrete, grounded Playwright test plan for ${describeApp(appName, appDescription)}.`,
     "You are given: the original requirement, each approved scenario's draft intent, real live-exploration findings (routes/testids/flows actually observed in the running app), and a static code scan.",
     "",
     "For EACH scenario given, produce ONE grounded plan with the SAME id as the input scenario. Rules:",
@@ -16,6 +17,7 @@ export function buildGroundSystemPrompt(): string {
     "- You are given `scenarioPaths` below: live-verified, per-scenario reachability findings from an agent that actually clicked through the real running app (not just read the code). Match each plan to its scenarioPaths entry by exact title.",
     "- If that entry has reachable:true, your `steps` array MUST begin with its exact `steps` sequence (same actions/testids/routes, in the same order) BEFORE any assertion step - do not shortcut straight to the assertion and assume the precondition already holds (it usually doesn't; the scenario's own precondition text often describes a prop/state the component's author could set directly in a unit test, not something visible by default in a real browser).",
     "- If that entry has reachable:false, set this plan's `groundable` to false and `ungroundableReason` to its exact `unreachableReason` - do NOT invent a fake path to make it look testable. Still produce minimal `steps`/`passCriteria` describing the gap (they won't be executed).",
+    "- If that entry has `externalCompletion` (its final state is completed by something outside the browser - a customer's own device, a webhook, a background job - not reachable:false, since the trigger itself IS real and reachable): set `groundable` to true, NOT false. After the real steps up to the trigger, add exactly one more step whose `action` says what completes this externally and whose `notes` contains, verbatim, every request in `externalCompletion` (method + url) that must be intercepted and the outcome this scenario expects (e.g. 'the request/response simulates approval, matching this scenario's positive expectedResult' or '...simulates denial, matching this scenario's negative expectedResult') - this is the ONLY way the Generator will know to mock it instead of skipping. Also copy `externalCompletion`'s request(s) into `expectedBackendCalls`.",
     "- If a scenario has no matching scenarioPaths entry at all (exploration skipped it), treat it the same as reachable:false with ungroundableReason explaining exploration didn't cover it.",
     "",
     "Output ONLY a single JSON object: { \"plans\": [ <one grounded plan per input scenario, same shape as below> ] } - no markdown fences, no commentary.",

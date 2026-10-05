@@ -18,6 +18,7 @@ export interface TestHistoryEntry {
   testRunId: string;
   testFileId: string;
   requirementId: string;
+  applicationId: string | null;
   testCaseName: string;
   filePath: string;
   website: string;
@@ -60,6 +61,7 @@ export function testHistoryRouter(db: Db, _config: Config): Router {
         testRunId: run.id,
         testFileId: file.id,
         requirementId: requirement.id,
+        applicationId: requirement.applicationId,
         testCaseName: requirement.title,
         filePath: file.filePath,
         website: resolveRunWebsite(run.appUrl, file.code),

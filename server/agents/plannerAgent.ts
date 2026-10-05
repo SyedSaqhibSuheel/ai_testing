@@ -6,7 +6,7 @@ import type { Config } from "../../src/config.js";
 import { requirements, scenarios, explorationRuns, type DiscoveredTestId } from "../db/schema.js";
 import { buildContext } from "../../src/context/buildContext.js";
 import { selectRelevantContext, type RelevantContext } from "../../src/context/selectRelevantContext.js";
-import { isKnownAppUrl } from "../config/appProfile.js";
+import { resolveAppConfig, hasSourceAccess } from "../config/activeApplication.js";
 import { getProvider } from "../../src/llm/index.js";
 import { startPlaywrightMcp } from "../../src/mcp/playwrightClient.js";
 import { exploreApp } from "./exploreApp.js";
@@ -53,6 +53,7 @@ function mergeTestIdSources(
  * human review. Never asserts pass/fail - that's a future phase.
  */
 export async function runPlannerAgent(db: Db, config: Config, requirementId: string, appBaseUrl?: string): Promise<void> {
+  config = resolveAppConfig(db, config);
   const requirement = db.select().from(requirements).where(eq(requirements.id, requirementId)).get();
   if (!requirement) throw new Error(`Requirement ${requirementId} not found`);
 
@@ -72,15 +73,16 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
   }
 
   const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
-  const isKnownApp = isKnownAppUrl(targetAppUrl, config);
-  const context = isKnownApp ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
+  const hasSource = hasSourceAccess(config);
+  const context = hasSource ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
   const relevant = context ? selectRelevantContext(requirement.rawText, context) : EMPTY_CONTEXT;
   const provider = getProvider(config);
 
-  // CallCenterUI's own login credentials only apply when the active target
-  // IS CallCenterUI - a different site's login has nothing to do with them.
+  // Login is the active application's own credentials, independent of
+  // whether its source code is available to scan - an app with no source
+  // access at all can still be logged into for live exploration.
   const login =
-    isKnownApp && config.appLoginUsername && config.appLoginPassword
+    config.appLoginUsername && config.appLoginPassword
       ? {
           username: config.appLoginUsername,
           password: config.appLoginPassword,
@@ -134,7 +136,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
     explorationId = explorationRow.id;
 
     updateAgentRunTask(db, runId, "Building test plan");
-    const groundSystem = buildGroundSystemPrompt();
+    const groundSystem = buildGroundSystemPrompt(config.applicationName, config.applicationDescription);
     const groundUser = buildGroundUserPrompt(
       requirement.rawText,
       approvedScenarios.map((s) => ({

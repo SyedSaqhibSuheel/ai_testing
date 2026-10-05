@@ -98,7 +98,7 @@ export const reportExplorationTool: ToolDef = {
       scenarioPaths: {
         type: "array",
         description:
-          "One entry per scenario you were given. For each, the exact sequence of real UI actions you personally performed (clicks/fills/navigations, by exact testid) that actually reached its precondition and confirmed it live - or, if you tried and found no such path exists (e.g. the state can only be caused by a backend/websocket event, not a click), reachable:false with why.",
+          "One entry per scenario you were given. For each, the exact sequence of real UI actions you personally performed (clicks/fills/navigations, by exact testid) that actually reached its precondition and confirmed it live. If the scenario's final state is completed by something outside the browser (another app/device, a webhook, a human elsewhere) rather than any click in this session - e.g. the UI enters a disabled 'waiting/pending' state after an action, with text implying something else must approve/respond - still report reachable:true for the steps up to and including that triggering action (they ARE real), and fill in externalCompletion with the real network request(s) you observed via browser_network_requests, so the test can later simulate that external actor's response deterministically. Only use reachable:false when you genuinely found no UI path to the precondition at all (not even a triggering action to observe).",
         items: {
           type: "object",
           properties: {
@@ -106,7 +106,7 @@ export const reportExplorationTool: ToolDef = {
             reachable: { type: "boolean" },
             steps: {
               type: "array",
-              description: "Only when reachable:true - the literal steps you took, in order, ending right before the assertion.",
+              description: "Only when reachable:true - the literal steps you took, in order, ending right before the assertion (or right after the triggering action, for an externally-completed scenario).",
               items: {
                 type: "object",
                 properties: {
@@ -118,7 +118,28 @@ export const reportExplorationTool: ToolDef = {
                 required: ["action"],
               },
             },
-            unreachableReason: { type: "string", description: "Only when reachable:false - what you tried and why no UI path exists." },
+            unreachableReason: { type: "string", description: "Only when reachable:false - what you tried and why no UI path exists at all." },
+            externalCompletion: {
+              type: "object",
+              description:
+                "Only when the scenario's completion is performed by something outside the browser. Call browser_network_requests right after the triggering action (and again after waiting a few seconds, to catch a polling request) and report the REAL request(s) you saw - never invent a plausible-looking endpoint.",
+              properties: {
+                triggerRequest: {
+                  type: "object",
+                  description: "The real request fired by the triggering action itself.",
+                  properties: { method: { type: "string" }, url: { type: "string" } },
+                  required: ["method", "url"],
+                },
+                pollingRequest: {
+                  type: "object",
+                  description: "The real request seen repeating afterward, if the UI polls for the result.",
+                  properties: { method: { type: "string" }, url: { type: "string" } },
+                  required: ["method", "url"],
+                },
+                note: { type: "string", description: "One sentence on what completes this externally and what you actually observed in the network log." },
+              },
+              required: ["note"],
+            },
           },
           required: ["scenarioTitle", "reachable"],
         },

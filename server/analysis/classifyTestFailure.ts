@@ -7,6 +7,7 @@ import { getProvider } from "../../src/llm/index.js";
 import type { Scenario as GroundedPlan } from "../../src/schemas/testPlan.js";
 import { TestFailureClassificationSchema, type TestFailureClassification } from "../schemas/testFailureClassification.js";
 import { buildTestFailureSystemPrompt, buildTestFailureUserPrompt } from "./testFailurePrompts.js";
+import { resolveAppConfig } from "../config/activeApplication.js";
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -21,6 +22,7 @@ function extractJson(text: string): unknown {
  * REAL_DEFECT, per explicit instruction in the system prompt.
  */
 export async function classifyTestFailure(db: Db, config: Config, testRunCaseId: string): Promise<void> {
+  config = resolveAppConfig(db, config);
   const testCase = db.select().from(testRunCases).where(eq(testRunCases.id, testRunCaseId)).get();
   if (!testCase || !testCase.errorMessage) return;
 
@@ -43,7 +45,7 @@ export async function classifyTestFailure(db: Db, config: Config, testRunCaseId:
   const knownTestIds = context.frontend.components.flatMap((c) => c.testIds);
 
   const provider = getProvider(config);
-  const system = buildTestFailureSystemPrompt();
+  const system = buildTestFailureSystemPrompt(config.applicationName, config.applicationDescription);
   const user = buildTestFailureUserPrompt({
     requirementText: requirement.rawText,
     passCriteria: groundedPlan?.passCriteria ?? [],

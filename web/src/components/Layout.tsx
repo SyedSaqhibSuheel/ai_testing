@@ -16,11 +16,13 @@ import {
   Sparkles,
   Menu,
   X,
+  Boxes,
 } from "lucide-react";
 import { ModeToggle } from "@/components/theme/ModeToggle";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/applications", label: "Applications", icon: Boxes },
    { to: "/requirements", label: "Requirements", icon: FileText },
   { to: "/code-analysis", label: "Code Analysis", icon: ScanSearch },
   { to: "/test-case-management", label: "Test Case Management", icon: ClipboardList },
@@ -37,6 +39,10 @@ export function Layout() {
   const { data: settings } = useQuery({
     queryKey: ["settings"],
     queryFn: api.getSettings,
+  });
+  const { data: active } = useQuery({
+    queryKey: ["active-application"],
+    queryFn: api.getActiveApplication,
   });
 
   return (
@@ -129,7 +135,7 @@ export function Layout() {
               </span>
 
               <span className="text-xs font-medium text-text">
-                System Online
+                {active?.application?.name ?? "No application set"}
               </span>
             </div>
 

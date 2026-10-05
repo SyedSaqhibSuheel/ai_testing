@@ -2,8 +2,38 @@ export interface Application {
   id: string;
   name: string;
   description: string | null;
+  appBaseUrl: string | null;
+  apiBaseUrl: string | null;
+  backendSrcDir: string | null;
+  frontendSrcDir: string | null;
+  frontendServerSrcDir: string | null;
+  loginUsername: string | null;
+  loginPasswordPresent: boolean;
+  loginUsernameLocator: string | null;
+  loginPasswordLocator: string | null;
+  loginSubmitLocator: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ApplicationInput {
+  name: string;
+  description?: string;
+  appBaseUrl?: string;
+  apiBaseUrl?: string;
+  backendSrcDir?: string;
+  frontendSrcDir?: string;
+  frontendServerSrcDir?: string;
+  loginUsername?: string;
+  loginPassword?: string;
+  loginUsernameLocator?: string;
+  loginPasswordLocator?: string;
+  loginSubmitLocator?: string;
+}
+
+export interface ActiveApplication {
+  application: Application | null;
+  hasSourceAccess: boolean;
 }
 
 
@@ -292,6 +322,7 @@ export interface TestHistoryEntry {
   testRunId: string;
   testFileId: string;
   requirementId: string;
+  applicationId: string | null;
   testCaseName: string;
   filePath: string;
   website: string;

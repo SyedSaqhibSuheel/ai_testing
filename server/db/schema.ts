@@ -13,6 +13,23 @@ export const applications = sqliteTable("applications", {
   id: id(),
   name: text("name").notNull().unique(),
   description: text("description"),
+  // Everything needed to point the whole pipeline at this app instead of
+  // another one - see server/config/activeApplication.ts, which resolves the
+  // active row's fields onto the global Config at the top of every agent
+  // entry point. All nullable: a brand-new application may have nothing but
+  // a name/base URL until someone fills the rest in, and an app with no
+  // source code at all (truly unknown stack) still works via live
+  // browser exploration alone.
+  appBaseUrl: text("app_base_url"),
+  apiBaseUrl: text("api_base_url"),
+  backendSrcDir: text("backend_src_dir"),
+  frontendSrcDir: text("frontend_src_dir"),
+  frontendServerSrcDir: text("frontend_server_src_dir"),
+  loginUsername: text("login_username"),
+  loginPassword: text("login_password"),
+  loginUsernameLocator: text("login_username_locator"),
+  loginPasswordLocator: text("login_password_locator"),
+  loginSubmitLocator: text("login_submit_locator"),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
 });
@@ -46,6 +63,11 @@ export const requirements = sqliteTable("requirements", {
   // sourceModule then holds the backend controller class name it was derived from.
   source: text("source").$type<RequirementSource>().notNull().default("manual"),
   sourceModule: text("source_module"),
+  // Which Application this requirement targets - set from the active
+  // Application at creation time (see server/config/activeApplication.ts).
+  // Nullable so pre-multi-app rows (everything created before this column
+  // existed) stay valid without a backfill.
+  applicationId: text("application_id").references(() => applications.id, { onDelete: "set null" }),
   isDeleted: integer("is_deleted", { mode: "boolean" }).notNull().default(false),
   createdAt: timestamp("created_at").notNull().$defaultFn(() => new Date()),
   updatedAt: timestamp("updated_at").notNull().$defaultFn(() => new Date()),
@@ -134,6 +156,15 @@ export interface ScenarioPath {
   reachable: boolean;
   steps: Array<{ action: string; testId?: string; route?: string; inputValue?: string }>;
   unreachableReason?: string;
+  // Real network request(s) observed being fired/polled when a scenario's
+  // completion happens outside the browser (another app/device, a webhook) -
+  // lets grounding/generation simulate that actor deterministically via
+  // page.route() instead of giving up. See server/schemas/exploration.ts.
+  externalCompletion?: {
+    triggerRequest?: { method: string; url: string };
+    pollingRequest?: { method: string; url: string };
+    note: string;
+  };
 }
 
 export const explorationRuns = sqliteTable("exploration_runs", {
