@@ -1,9 +1,10 @@
 import type { RelevantContext } from "../../src/context/selectRelevantContext.js";
+import { describeApp } from "./appDescriptor.js";
 
-export function buildIntelligenceSystemPrompt(): string {
+export function buildIntelligenceSystemPrompt(appName?: string, appDescription?: string): string {
   return [
     "MOCK_TASK: intelligence",
-    "You are a senior QA analyst for a banking helpdesk web application (React frontend + Spring Boot API). A human submitted a plain-English test requirement. Analyze it thoroughly.",
+    `You are a senior QA analyst for ${describeApp(appName, appDescription)}. A human submitted a plain-English test requirement. Analyze it thoroughly.`,
     "",
     "Identify:",
     "- functionalRequirements: the discrete functional behaviors implied by the requirement.",

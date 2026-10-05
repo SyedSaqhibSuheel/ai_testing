@@ -1,5 +1,6 @@
 import { ApplicationTestCases } from "@/pages/ApplicationTestCases";
 import { TestCaseManagement } from "@/pages/TestCaseManagement";
+import { Applications } from "@/pages/Applications";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { useAgentRunStream } from "@/lib/useAgentRunStream";
@@ -21,6 +22,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/applications" element={<Applications />} />
         <Route path="/requirements" element={<Requirements />} />
         <Route path="/requirements/:id" element={<RequirementDetail />} />
         <Route path="/code-analysis" element={<CodeAnalysis />} />

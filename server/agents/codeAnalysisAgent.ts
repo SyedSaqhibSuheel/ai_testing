@@ -12,6 +12,7 @@ import { IntelligenceAnalysisSchema, type IntelligenceAnalysis } from "../schema
 import { buildCodeAnalysisSystemPrompt, buildCodeAnalysisUserPrompt, buildAutoRequirementText } from "./codeAnalysisPrompts.js";
 import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } from "./agentRunTracking.js";
 import { persistIntelligenceAnalysis } from "./persistIntelligenceAnalysis.js";
+import { resolveAppConfig } from "../config/activeApplication.js";
 
 export interface FrontendModule {
   file: string;
@@ -40,15 +41,15 @@ function isReachableFromApp(file: string, allSourceFiles: string[]): boolean {
 }
 
 /**
- * The real, product-specific screens/components of the CallCenterUI app -
+ * The real, product-specific screens/components of the active application -
  * deliberately narrower than "every .tsx under frontendSrcDir": excludes
- * components/ui (generic shadcn primitives with no call-center-specific
+ * components/ui (generic shadcn primitives with no product-specific
  * behavior), components/examples (storybook-style demo wrappers, not real
  * app screens), and any component that only that demo wrapper imports (i.e.
  * never actually mounted by a real page - see isReachableFromApp above).
  * This is the whole point of Code Analysis: it should only ever describe
- * the actual call center product, never the shared fidar-server backend,
- * generic UI kit, or orphaned/demo-only components.
+ * the actual product, never a separate backend repo, generic UI kit, or
+ * orphaned/demo-only components.
  */
 function listFrontendModules(config: Config): FrontendModule[] {
   const sep = path.sep;
@@ -91,17 +92,33 @@ export interface CodeModuleSummary {
 }
 
 /**
- * Lists every CallCenterUI screen/component the scanner found, cross-referenced
+ * Lists every screen/component the scanner found, cross-referenced
  * against requirements already generated from it (source=code_analysis,
  * sourceModule=componentName) so the UI can show what's left to analyze.
  */
-export function listCodeModules(db: Db, config: Config): CodeModuleSummary[] {
-  const modules = listFrontendModules(config);
-  const existing = db
+/**
+ * code_analysis requirements, scoped to one Application - so switching the
+ * active application doesn't show a completely different app's screens
+ * under "already analyzed" or "added".
+ */
+function codeAnalysisRequirements(db: Db, applicationId: string | undefined) {
+  return db
     .select()
     .from(requirements)
-    .where(and(eq(requirements.source, "code_analysis"), eq(requirements.isDeleted, false)))
+    .where(
+      and(
+        eq(requirements.source, "code_analysis"),
+        eq(requirements.isDeleted, false),
+        applicationId ? eq(requirements.applicationId, applicationId) : undefined
+      )
+    )
     .all();
+}
+
+export function listCodeModules(db: Db, config: Config): CodeModuleSummary[] {
+  config = resolveAppConfig(db, config);
+  const modules = listFrontendModules(config);
+  const existing = codeAnalysisRequirements(db, config.applicationId);
   const bySourceModule = new Map(existing.map((r) => [r.sourceModule, r]));
 
   return modules.map((m) => {
@@ -129,13 +146,10 @@ export interface AddedCodeRequirementSummary {
  * they never re-point an existing module row or skew its analyzed counts.
  */
 export function listAddedCodeRequirements(db: Db, config: Config): AddedCodeRequirementSummary[] {
+  config = resolveAppConfig(db, config);
   const moduleNames = new Set(listFrontendModules(config).map((m) => m.componentName));
   const latestByName = new Map<string, AddedCodeRequirementSummary>();
-  const rows = db
-    .select()
-    .from(requirements)
-    .where(and(eq(requirements.source, "code_analysis"), eq(requirements.isDeleted, false)))
-    .all();
+  const rows = codeAnalysisRequirements(db, config.applicationId);
   for (const r of rows) {
     if (!r.sourceModule || moduleNames.has(r.sourceModule)) continue;
     latestByName.set(r.sourceModule, { name: r.sourceModule, requirementId: r.id, requirementStatus: r.status });
@@ -145,8 +159,8 @@ export function listAddedCodeRequirements(db: Db, config: Config): AddedCodeRequ
 
 async function callCodeAnalysisLlm(config: Config, module: FrontendModule, source: string, backendContext: RelevantContext): Promise<IntelligenceAnalysis> {
   const provider = getProvider(config);
-  const system = buildCodeAnalysisSystemPrompt();
-  const user = buildCodeAnalysisUserPrompt(module, source, backendContext);
+  const system = buildCodeAnalysisSystemPrompt(config.applicationName, config.applicationDescription);
+  const user = buildCodeAnalysisUserPrompt(module, source, backendContext, config.applicationName);
 
   const attempt = async (extra?: string) => {
     const result = await provider.chat(
@@ -177,11 +191,12 @@ async function analyzeModule(db: Db, config: Config, module: FrontendModule): Pr
     .insert(requirements)
     .values({
       title: `Code Analysis: ${module.componentName}`,
-      rawText: buildAutoRequirementText(module),
+      rawText: buildAutoRequirementText(module, config.applicationName),
       submittedBy: "code-analysis-agent",
       source: "code_analysis",
       sourceModule: module.componentName,
       status: "analyzing",
+      applicationId: config.applicationId,
     })
     .returning()
     .get();
@@ -199,8 +214,8 @@ async function analyzeModule(db: Db, config: Config, module: FrontendModule): Pr
     const context = buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir);
     const queryText = [module.componentName, ...module.testIds].join(" ");
     // Backend endpoints are reference-only support here (this screen may call
-    // fidar-server APIs) - the analysis and the requirement it produces are
-    // about the CallCenterUI screen itself, never about the backend module.
+    // a separate backend's APIs) - the analysis and the requirement it
+    // produces are about the frontend screen itself, never the backend module.
     const backendContext = selectRelevantContext(queryText, context, { controllers: 3, dtos: 6, components: 0 });
 
     updateAgentRunTask(db, runId, `Analyzing: ${module.componentName}`);
@@ -222,8 +237,8 @@ export function isCodeAnalysisBatchRunning(): boolean {
 }
 
 /**
- * Analyzes every CallCenterUI screen/component the scanner finds (the whole
- * call center product, one click), skipping ones that already have a
+ * Analyzes every screen/component the scanner finds (the whole product,
+ * one click), skipping ones that already have a
  * non-failed code_analysis requirement unless `force` is set. Runs modules
  * sequentially and keeps going past a single module's failure so one bad
  * LLM response doesn't block the rest - the UI shows per-module status via
@@ -232,11 +247,10 @@ export function isCodeAnalysisBatchRunning(): boolean {
 export async function runCodeAnalysisBatch(db: Db, config: Config, opts: { force?: boolean } = {}): Promise<void> {
   if (batchRunning) throw new Error("A code analysis run is already in progress");
   batchRunning = true;
+  config = resolveAppConfig(db, config);
   try {
     const modules = listFrontendModules(config);
-    const existing = opts.force
-      ? []
-      : db.select().from(requirements).where(and(eq(requirements.source, "code_analysis"), eq(requirements.isDeleted, false))).all();
+    const existing = opts.force ? [] : codeAnalysisRequirements(db, config.applicationId);
     const alreadyAnalyzed = new Set(existing.filter((r) => r.status !== "failed").map((r) => r.sourceModule));
 
     for (const module of modules) {

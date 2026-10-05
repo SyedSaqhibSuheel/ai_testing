@@ -66,7 +66,17 @@ const ConfigSchema = z.object({
   managedRepoBranch: z.string(),
 });
 
-export type Config = z.infer<typeof ConfigSchema>;
+// The three `application*` fields are never set by loadConfig()/ConfigSchema
+// itself - they're overlaid at runtime by server/config/activeApplication.ts
+// onto a copy of this object, from whichever Application is currently active,
+// so every agent that already reads `config.backendSrcDir`/`config.appBaseUrl`/
+// etc. automatically operates on the right app without its own signature
+// needing to change.
+export type Config = z.infer<typeof ConfigSchema> & {
+  applicationId?: string;
+  applicationName?: string;
+  applicationDescription?: string;
+};
 
 function toBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === "") return fallback;

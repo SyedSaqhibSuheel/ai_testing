@@ -1,8 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import type {
+  ActiveApplication,
   AgentRun,
   AddedCodeRequirementSummary,
   Application,
+  ApplicationInput,
   CodeFeatureSummary,
   CodeModuleSummary,
   DashboardSummary,
@@ -54,6 +56,12 @@ export const api = {
  // Applications
 listApplications: () =>
   request<Application[]>("/applications"),
+getActiveApplication: () => request<ActiveApplication>("/applications/active"),
+createApplication: (input: ApplicationInput) =>
+  request<Application>("/applications", { method: "POST", body: JSON.stringify(input) }),
+updateApplication: (id: string, patch: Partial<ApplicationInput>) =>
+  request<Application>(`/applications/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+activateApplication: (id: string) => request<Application>(`/applications/${id}/activate`, { method: "POST" }),
 
   // Scenarios
  listScenarios: (params?: {

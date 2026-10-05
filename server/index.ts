@@ -1,6 +1,7 @@
 import express from "express";
 import { loadConfig } from "../src/config.js";
 import { createDb } from "./db/client.js";
+import { seedDefaultApplicationIfNone } from "./config/activeApplication.js";
 import { requirementsRouter } from "./routes/requirements.js";
 import { applicationsRouter } from "./routes/applications.js";
 import { scenariosRouter } from "./routes/scenarios.js";
@@ -20,6 +21,7 @@ import { attachSseHub } from "./sse/hub.js";
 
 const config = loadConfig();
 const db = createDb(config.dbPath);
+seedDefaultApplicationIfNone(db, config);
 const urlConfigService = new URLConfigService(db, {
   defaultAppBaseUrl: config.appBaseUrl,
   defaultApiBaseUrl: config.apiBaseUrl,
@@ -32,7 +34,7 @@ app.use(express.json());
 // path isn't swallowed as an :id param.
 attachSseHub(db, app);
 
-app.use("/api/applications", applicationsRouter(db));
+app.use("/api/applications", applicationsRouter(db, config));
 app.use("/api/requirements", requirementsRouter(db, config, urlConfigService));
 app.use("/api/scenarios", scenariosRouter(db, config, urlConfigService));
 app.use("/api/settings", settingsRouter(db, config));

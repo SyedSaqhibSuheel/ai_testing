@@ -1,16 +1,17 @@
 import type { RelevantContext } from "../../src/context/selectRelevantContext.js";
 import type { FrontendModule } from "./codeAnalysisAgent.js";
+import { describeApp } from "./appDescriptor.js";
 
 const MAX_SOURCE_CHARS = 12000;
 
-export function buildCodeAnalysisSystemPrompt(): string {
+export function buildCodeAnalysisSystemPrompt(appName?: string, appDescription?: string): string {
   return [
     "MOCK_TASK: intelligence",
-    "You are a senior QA analyst for the CallCenterUI application - the actual call center agent helpdesk product (React frontend). You are NOT given a human-written requirement. Instead you are given the real source code of ONE screen or component from this app, plus (for reference only) any backend API endpoints it appears to call. Read the code like a QA engineer seeing it for the first time and reverse-engineer what it does, then propose tests for it.",
+    `You are a senior QA analyst for ${describeApp(appName, appDescription)} (React frontend). You are NOT given a human-written requirement. Instead you are given the real source code of ONE screen or component from this app, plus (for reference only) any backend API endpoints it appears to call. Read the code like a QA engineer seeing it for the first time and reverse-engineer what it does, then propose tests for it.`,
     "",
     "From the code alone, infer:",
-    "- functionalRequirements: the discrete functional behaviors this screen/component implements - what a call center agent can see and do here.",
-    "- userRoles: which actor(s) use this screen (e.g. Call Center Agent, Administrator) - infer from the code, props, and any role checks.",
+    "- functionalRequirements: the discrete functional behaviors this screen/component implements - what a user can see and do here.",
+    "- userRoles: which actor(s) use this screen (e.g. Agent, Administrator) - infer from the code, props, and any role checks.",
     "- validationRules: validation/business rules implied by the code (required fields, disabled states, conditional rendering, error states, confirmation steps before a destructive action).",
     "- riskAreas: parts of this screen most likely to hide bugs, with why (e.g. an irreversible Approve/Deny action, async state that can race, a search/filter that can return zero results).",
     "- suggestedCoverage: short list of testing angles worth covering.",
@@ -50,13 +51,14 @@ export function buildCodeAnalysisSystemPrompt(): string {
  * rawText and (as a `REQUIREMENT:` line below) so the mock LLM provider's
  * MOCK_TASK: intelligence handler still extracts something sensible.
  */
-export function buildAutoRequirementText(module: FrontendModule): string {
+export function buildAutoRequirementText(module: FrontendModule, appName?: string): string {
   const actions = module.testIds.filter((t) => /^button|^tab/i.test(t.replace(/^`|`$/g, "")));
   const actionsNote = actions.length ? ` Known interactive elements: ${actions.join(", ")}.` : "";
-  return `Auto-generated from source code analysis of the CallCenterUI screen/component "${module.componentName}" (${module.relativePath}).${actionsNote}`;
+  const appLabel = appName ? `the "${appName}"` : "this";
+  return `Auto-generated from source code analysis of ${appLabel} screen/component "${module.componentName}" (${module.relativePath}).${actionsNote}`;
 }
 
-export function buildCodeAnalysisUserPrompt(module: FrontendModule, source: string, backendContext: RelevantContext): string {
+export function buildCodeAnalysisUserPrompt(module: FrontendModule, source: string, backendContext: RelevantContext, appName?: string): string {
   const truncated = source.length > MAX_SOURCE_CHARS;
   const sourceExcerpt = truncated ? `${source.slice(0, MAX_SOURCE_CHARS)}\n\n... (truncated, ${source.length - MAX_SOURCE_CHARS} more characters)` : source;
 
@@ -65,7 +67,7 @@ export function buildCodeAnalysisUserPrompt(module: FrontendModule, source: stri
     "(no obviously related backend endpoint found by static scan - infer from fetch/API calls in the code itself if present)";
 
   return [
-    `REQUIREMENT: ${buildAutoRequirementText(module)}`,
+    `REQUIREMENT: ${buildAutoRequirementText(module, appName)}`,
     "",
     `SCREEN/COMPONENT: ${module.componentName} (${module.relativePath})`,
     module.testIds.length ? `Known data-testid values found in this file: ${module.testIds.join(", ")}` : "No data-testid attributes found in this file.",

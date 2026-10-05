@@ -185,6 +185,9 @@ export function TestRunsPanel({ fileId, committed }: { fileId: string; committed
     queryKey: ["test-run", expandedRunId],
     queryFn: () => api.getTestRun(expandedRunId!),
     enabled: !!expandedRunId,
+    // So the expanded case-by-case breakdown fills in with pass/fail as the
+    // run progresses, instead of staying empty until it's manually reopened.
+    refetchInterval: (query) => (query.state.data?.run.status === "running" ? 2000 : false),
   });
 
   return (

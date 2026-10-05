@@ -262,9 +262,11 @@ export function TestHistory() {
     queryFn: api.getTestHistory,
     refetchInterval: (query) => (query.state.data?.some((e) => e.status === "running") ? 3000 : false),
   });
+  const { data: applications } = useQuery({ queryKey: ["applications"], queryFn: api.listApplications });
 
   const [search, setSearch] = useState("");
   const [website, setWebsite] = useState("all");
+  const [applicationId, setApplicationId] = useState("all");
   const [status, setStatus] = useState<"all" | TestRunStatus>("all");
   const [date, setDate] = useState("");
 
@@ -274,12 +276,13 @@ export function TestHistory() {
     const q = search.trim().toLowerCase();
     return (data ?? []).filter((e) => {
       if (website !== "all" && e.website !== website) return false;
+      if (applicationId !== "all" && e.applicationId !== applicationId) return false;
       if (status !== "all" && e.status !== status) return false;
       if (date && toDateKey(e.startedAt) !== date) return false;
       if (q && !e.testCaseName.toLowerCase().includes(q) && !e.requirementId.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [data, search, website, status, date]);
+  }, [data, search, website, applicationId, status, date]);
 
   const grouped = useMemo<WebsiteGroup[]>(() => {
     // website -> dateKey -> requirementId -> entries (already sorted desc by
@@ -320,10 +323,11 @@ export function TestHistory() {
   const clearFilters = () => {
     setSearch("");
     setWebsite("all");
+    setApplicationId("all");
     setStatus("all");
     setDate("");
   };
-  const hasFilters = !!search || website !== "all" || status !== "all" || !!date;
+  const hasFilters = !!search || website !== "all" || applicationId !== "all" || status !== "all" || !!date;
 
   return (
     <div>
@@ -349,6 +353,18 @@ export function TestHistory() {
               {websites.map((w) => (
                 <option key={w} value={w}>
                   {w}
+                </option>
+              ))}
+            </select>
+            <select
+              value={applicationId}
+              onChange={(e) => setApplicationId(e.target.value)}
+              className="bg-panel-2 border border-border rounded-md px-3 py-2 text-sm"
+            >
+              <option value="all">All applications</option>
+              {applications?.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
                 </option>
               ))}
             </select>

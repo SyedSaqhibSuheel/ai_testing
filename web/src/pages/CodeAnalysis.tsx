@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
@@ -24,6 +25,8 @@ const ACTIONABLE = new Set<RequirementStatus>(["awaiting_scenario_approval", "aw
 export function CodeAnalysis() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { data: active } = useQuery({ queryKey: ["active-application"], queryFn: api.getActiveApplication });
+  const appName = active?.application?.name ?? "the active application";
   const { data } = useQuery({
     queryKey: ["code-modules"],
     queryFn: api.listCodeModules,
@@ -66,6 +69,13 @@ export function CodeAnalysis() {
     }
   }, [featureData, autoAnalyze]);
 
+  const runAll = useMutation({
+    mutationFn: api.runAllTests,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["test-runs"] });
+    },
+  });
+
   const modules = data?.modules ?? [];
   const features = (featureData?.features ?? []).filter((f) => f.files.length > 0);
   const featureNames = new Set(features.map((f) => f.name));
@@ -106,19 +116,26 @@ export function CodeAnalysis() {
     <div>
       <PageHeader
         title="Code Analysis"
-        subtitle="No requirement text needed - scan the CallCenterUI app's own source code and let AI infer what to test"
+        subtitle={`No requirement text needed - scan ${appName}'s own source code and let AI infer what to test`}
       />
       <div className="p-8 space-y-6">
+        {active && !active.hasSourceAccess ? (
+          <Card className="p-5 text-sm text-muted">
+            {appName} has no source directories configured, so there's nothing to scan here. Code Analysis is optional -
+            add a requirement manually (or run the Planner with live browser exploration) to test it anyway, or set its
+            source directories on the <Link to="/applications" className="text-accent hover:underline">Applications</Link> page.
+          </Card>
+        ) : (
         <Card className="p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-medium">
-                {totalCount === 0 ? "Scanning source..." : `${analyzedCount} / ${totalCount} CallCenterUI screens & behaviours analyzed`}
+                {totalCount === 0 ? "Scanning source..." : `${analyzedCount} / ${totalCount} ${appName} screens & behaviours analyzed`}
               </div>
               <p className="text-xs text-muted mt-1 max-w-xl">
-                Reads every real screen/component in CallCenterUI (excludes the generic UI kit and demo wrappers - fidar-server is
-                never analyzed on its own, only referenced as the API it calls), plus the behaviours that span several of them - theme
-                (dark/light mode), action buttons, statuses and navigation - reverse-engineers each one straight from the code, and
+                Reads every real screen/component in {appName} (excludes the generic UI kit and demo wrappers), plus the
+                behaviours that span several of them - theme (dark/light mode), action buttons, statuses and navigation -
+                reverse-engineers each one straight from the code, and
                 proposes draft test scenarios. Open any analyzed row to approve its scenarios and generate and run its tests.
               </p>
             </div>
@@ -134,34 +151,28 @@ export function CodeAnalysis() {
               <Button onClick={() => run.mutate(false)} disabled={running || run.isPending || analyzedCount === totalCount}>
                 {running ? "Analyzing..." : "Analyze remaining modules"}
               </Button>
-              <Button
-                onClick={async () => {
-                  try {
-                    await api.runAllTests();
-                  } catch (error) {
-                    console.error("Failed to run all tests:", error);
-                  }
-                }}
-              >
-                Save & Run All
+              <Button onClick={() => runAll.mutate()} disabled={runAll.isPending}>
+                {runAll.isPending ? "Running..." : "Save & Run All"}
               </Button>
             </div>
           </div>
           {run.isError && <p className="text-xs text-fail mt-3">{(run.error as Error).message}</p>}
           {autoAnalyze.isError && <p className="text-xs text-fail mt-3">{(autoAnalyze.error as Error).message}</p>}
+          {runAll.isError && <p className="text-xs text-fail mt-3">{(runAll.error as Error).message}</p>}
           {running && (
             <p className="text-xs text-muted mt-3">
               Running in the background - each module becomes a requirement below as soon as it's analyzed. Safe to navigate away.
             </p>
           )}
         </Card>
+        )}
 
         <div>
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">
             Discovered screens/components {rows.length ? `(${rows.length}${needsReview ? ` · ${needsReview} awaiting review` : ""})` : ""}
           </h2>
           <Card className="divide-y divide-border overflow-hidden">
-            {rows.length === 0 && <div className="p-6 text-sm text-muted text-center">No CallCenterUI screens found by the source scanner yet.</div>}
+            {rows.length === 0 && <div className="p-6 text-sm text-muted text-center">No screens found by the source scanner yet.</div>}
             {rows.map((r) => {
               const isOpen = !!r.requirementId && expanded === r.key;
               return (

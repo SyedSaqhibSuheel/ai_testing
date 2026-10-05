@@ -11,12 +11,14 @@ import { IntelligenceAnalysisSchema, type IntelligenceAnalysis } from "../schema
 import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } from "./agentRunTracking.js";
 import { persistIntelligenceAnalysis } from "./persistIntelligenceAnalysis.js";
 import { isCodeAnalysisBatchRunning } from "./codeAnalysisAgent.js";
+import { resolveAppConfig } from "../config/activeApplication.js";
+import { describeApp } from "./appDescriptor.js";
 
 /**
  * Cross-cutting behaviours that no single screen/component owns (e.g. the
  * theme lives in ThemeProvider + ThemeToggle + Header + index.css), so the
  * per-module Code Analysis can't produce a requirement for them. Each one is
- * derived purely from the CallCenterUI source: the files whose code matches
+ * derived purely from the active application's source: the files whose code matches
  * `pattern`, read and handed to the LLM like a module is. The resulting
  * requirement is an ordinary code_analysis requirement (sourceModule = name),
  * so it flows through the same scenario → plan → generate → run pipeline.
@@ -122,14 +124,15 @@ function excerpt(source: string, pattern: RegExp): string {
   return out;
 }
 
-function buildRequirementText(feature: CodeFeature, files: FeatureFile[]): string {
-  return `Auto-generated from source code analysis of CallCenterUI's ${feature.title} across ${files.length} file(s): ${files.map((f) => f.relativePath).join(", ")}.`;
+function buildRequirementText(feature: CodeFeature, files: FeatureFile[], appName?: string): string {
+  const appLabel = appName ? `"${appName}"'s` : "this app's";
+  return `Auto-generated from source code analysis of ${appLabel} ${feature.title} across ${files.length} file(s): ${files.map((f) => f.relativePath).join(", ")}.`;
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(appName?: string, appDescription?: string): string {
   return [
     "MOCK_TASK: intelligence",
-    "You are a senior QA analyst for the CallCenterUI application (a call center helpdesk React frontend). You are NOT given a human-written requirement. Instead you are given excerpts of the real source code for ONE cross-cutting behaviour of the app, taken from several screens/components. Read the code like a QA engineer and reverse-engineer what that behaviour does across the app, then propose tests for it.",
+    `You are a senior QA analyst for ${describeApp(appName, appDescription)} (React frontend). You are NOT given a human-written requirement. Instead you are given excerpts of the real source code for ONE cross-cutting behaviour of the app, taken from several screens/components. Read the code like a QA engineer and reverse-engineer what that behaviour does across the app, then propose tests for it.`,
     "",
     "Only describe what the code evidences - never invent screens, fields, values or rules that aren't in it. Use the exact labels, status values, route paths and data-testid values from the code so a later grounding step can locate them. Keep draftSteps in plain English (no Playwright syntax).",
     "",
@@ -240,7 +243,7 @@ export function normalizeScenarioLabels(raw: unknown): unknown {
 
 async function callLlm(config: Config, user: string): Promise<IntelligenceAnalysis> {
   const provider = getProvider(config);
-  const system = buildSystemPrompt();
+  const system = buildSystemPrompt(config.applicationName, config.applicationDescription);
   const attempt = async (extra?: string) => {
     const result = await provider.chat(
       [
@@ -267,11 +270,12 @@ async function analyzeFeature(db: Db, config: Config, feature: CodeFeature, file
     .insert(requirements)
     .values({
       title: `Code Analysis: ${feature.title}`,
-      rawText: buildRequirementText(feature, files),
+      rawText: buildRequirementText(feature, files, config.applicationName),
       submittedBy: "code-analysis-agent",
       source: "code_analysis",
       sourceModule: feature.name,
       status: "analyzing",
+      applicationId: config.applicationId,
     })
     .returning()
     .get();
@@ -293,13 +297,19 @@ async function analyzeFeature(db: Db, config: Config, feature: CodeFeature, file
   }
 }
 
-function latestFeatureRequirements(db: Db) {
+function latestFeatureRequirements(db: Db, applicationId: string | undefined) {
   const names = new Set(FEATURES.map((f) => f.name));
   const byName = new Map<string, typeof requirements.$inferSelect>();
   const rows = db
     .select()
     .from(requirements)
-    .where(and(eq(requirements.source, "code_analysis"), eq(requirements.isDeleted, false)))
+    .where(
+      and(
+        eq(requirements.source, "code_analysis"),
+        eq(requirements.isDeleted, false),
+        applicationId ? eq(requirements.applicationId, applicationId) : undefined
+      )
+    )
     .orderBy(desc(requirements.createdAt))
     .all();
   for (const r of rows) {
@@ -317,7 +327,8 @@ export interface CodeFeatureSummary {
 }
 
 export function listCodeFeatures(db: Db, config: Config): CodeFeatureSummary[] {
-  const existing = latestFeatureRequirements(db);
+  config = resolveAppConfig(db, config);
+  const existing = latestFeatureRequirements(db, config.applicationId);
   return FEATURES.map((feature) => {
     const match = existing.get(feature.name);
     return {
@@ -344,9 +355,10 @@ export function isCodeFeatureBatchRunning(): boolean {
 export async function runCodeFeatureBatch(db: Db, config: Config, opts: { force?: boolean } = {}): Promise<void> {
   if (featureBatchRunning) throw new Error("A code feature analysis run is already in progress");
   featureBatchRunning = true;
+  config = resolveAppConfig(db, config);
   try {
     while (isCodeAnalysisBatchRunning()) await new Promise((r) => setTimeout(r, 3000));
-    const existing = latestFeatureRequirements(db);
+    const existing = latestFeatureRequirements(db, config.applicationId);
     for (const feature of FEATURES) {
       const current = existing.get(feature.name);
       if (!opts.force && current && current.status !== "failed") continue;
