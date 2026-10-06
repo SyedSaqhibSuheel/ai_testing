@@ -14,11 +14,23 @@ export const DraftScenarioSchema = z.object({
 });
 export type DraftScenario = z.infer<typeof DraftScenarioSchema>;
 
+// Models sometimes return these as plain strings instead of objects; the
+// string carries the same information, so accept it rather than failing the
+// whole analysis.
+const FunctionalRequirementSchema = z.union([
+  z.object({ description: z.string() }),
+  z.string().transform((description) => ({ description })),
+]);
+const RiskAreaSchema = z.union([
+  z.object({ area: z.string(), reason: z.string() }),
+  z.string().transform((area) => ({ area, reason: "" })),
+]);
+
 export const IntelligenceAnalysisSchema = z.object({
-  functionalRequirements: z.array(z.object({ description: z.string() })).min(1),
+  functionalRequirements: z.array(FunctionalRequirementSchema).min(1),
   userRoles: z.array(z.string()).min(1),
   validationRules: z.array(z.string()).default([]),
-  riskAreas: z.array(z.object({ area: z.string(), reason: z.string() })).default([]),
+  riskAreas: z.array(RiskAreaSchema).default([]),
   suggestedCoverage: z.array(z.string()).default([]),
   scenarios: z.array(DraftScenarioSchema).min(1),
 });
