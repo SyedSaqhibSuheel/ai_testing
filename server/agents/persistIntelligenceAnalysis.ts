@@ -13,10 +13,18 @@ export function insertScenarioFromDraft(
   requirementId: string,
   analysisId: string | null
 ): string {
+  // A scenario belongs to its requirement's application - without this the
+  // per-application Test Case Management view can never find it.
+  const requirement = db
+    .select({ applicationId: requirements.applicationId })
+    .from(requirements)
+    .where(eq(requirements.id, requirementId))
+    .get();
   const row = db
     .insert(scenarios)
     .values({
       requirementId,
+      applicationId: requirement?.applicationId ?? null,
       analysisId: analysisId ?? undefined,
       sourceType: "ai_generated",
       title: draft.title,

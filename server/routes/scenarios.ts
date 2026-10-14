@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { URLConfigService } from "../config/urlConfigService.js";
-import { scenarios } from "../db/schema.js";
+import { requirements, scenarios } from "../db/schema.js";
 import { approveScenario, rejectScenario, deleteScenario, editScenario } from "../scenarios/scenarioTransitions.js";
 import { regenerateScenario } from "../agents/intelligenceAgent.js";
 
@@ -27,12 +27,19 @@ export function scenariosRouter(db: Db, config: Config, urlConfigService?: URLCo
       return;
     }
     const actor = typeof b.actor === "string" ? b.actor : "unknown";
+    const requirement = db
+      .select({ applicationId: requirements.applicationId })
+      .from(requirements)
+      .where(eq(requirements.id, b.requirementId))
+      .get();
     const row = db
       .insert(scenarios)
       .values({
         requirementId: b.requirementId,
-applicationId: typeof b.applicationId === "string" ? b.applicationId : null, 
-sourceType: "user_added",
+        // Default to the requirement's application so manually added test
+        // cases still show up under Test Case Management.
+        applicationId: typeof b.applicationId === "string" ? b.applicationId : (requirement?.applicationId ?? null),
+        sourceType: "user_added",
         title: b.title,
         description: b.description,
         priority: b.priority ?? "medium",
