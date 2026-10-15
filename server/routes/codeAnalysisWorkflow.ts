@@ -41,7 +41,7 @@ export function codeAnalysisWorkflowRouter(db: Db, config: Config, urlConfigServ
 
   router.post("/auto-run", (req, res) => {
     try {
-      res.status(202).json(startAutoRun(db, config, { force: req.body?.force === true }));
+      res.status(202).json(startAutoRun(db, config, { force: req.body?.force === true, skipAnalysis: req.body?.skipAnalysis === true }));
     } catch (err) {
       res.status(409).json({ error: err instanceof Error ? err.message : String(err) });
     }

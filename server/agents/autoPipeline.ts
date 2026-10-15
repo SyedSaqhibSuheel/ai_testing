@@ -70,7 +70,14 @@ const CONTINUABLE = ["awaiting_scenario_approval", "planning", "awaiting_plan_ap
  * share the app, its login session and its data). Results land as normal
  * test runs, so they show up under Test Case Management for the application.
  */
-export function startAutoRun(db: Db, config: Config, opts: { force?: boolean } = {}): AutoRunState {
+export interface AutoRunOptions {
+  /** Re-analyze screens that were already analyzed. */
+  force?: boolean;
+  /** Skip analysis and go straight to generate → commit → run ("Save & Run All"). */
+  skipAnalysis?: boolean;
+}
+
+export function startAutoRun(db: Db, config: Config, opts: AutoRunOptions = {}): AutoRunState {
   if (!isFullyAutomatic(db, config)) {
     throw new Error('Full auto needs the approval mode set to "Fully Automatic" (Settings). In other modes, approve each requirement from its row.');
   }
@@ -80,8 +87,8 @@ export function startAutoRun(db: Db, config: Config, opts: { force?: boolean } =
   const resolved = resolveAppConfig(db, config);
   const state: AutoRunState = {
     applicationId: resolved.applicationId,
-    stage: "analyzing",
-    message: "Analyzing the application's screens and behaviours",
+    stage: opts.skipAnalysis ? "testing" : "analyzing",
+    message: opts.skipAnalysis ? "Collecting requirements to test" : "Analyzing the application's screens and behaviours",
     total: 0,
     completed: 0,
     succeeded: 0,
@@ -102,12 +109,14 @@ export function startAutoRun(db: Db, config: Config, opts: { force?: boolean } =
   return state;
 }
 
-async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: { force?: boolean }): Promise<void> {
+async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: AutoRunOptions): Promise<void> {
   // Modules first, then the cross-cutting features (the feature batch waits
   // for the module batch anyway). Each skips what's already analyzed unless
   // forced, and retries what failed.
-  await runCodeAnalysisBatch(db, config, { force: opts.force });
-  await runCodeFeatureBatch(db, config, { force: opts.force });
+  if (!opts.skipAnalysis) {
+    await runCodeAnalysisBatch(db, config, { force: opts.force });
+    await runCodeFeatureBatch(db, config, { force: opts.force });
+  }
 
   const appUrl = resolveTargetAppUrl(db, config);
   const rows = db

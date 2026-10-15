@@ -76,9 +76,9 @@ export function CodeAnalysis() {
     },
   });
 
-  // Full auto: one click analyzes the whole app, then plans, generates,
-  // commits and runs every requirement. Only in Fully Automatic mode - the
-  // other modes keep their human gates, so the button explains instead.
+  // Fully Automatic mode: the existing buttons analyze the whole app, then
+  // plan, generate, commit and run every requirement. Other modes keep their
+  // human gates.
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
   const fullyAutomatic = settings?.approvalMode === "fully_automatic";
   const { data: autoRun } = useQuery({
@@ -88,7 +88,7 @@ export function CodeAnalysis() {
   });
   const autoRunActive = !!autoRun && (autoRun.stage === "analyzing" || autoRun.stage === "testing");
   const startAutoRun = useMutation({
-    mutationFn: (force: boolean) => api.startAutoRun(force),
+    mutationFn: (opts: { force?: boolean; skipAnalysis?: boolean }) => api.startAutoRun(opts),
     onSuccess: (state) => {
       queryClient.setQueryData(["auto-run"], state);
       queryClient.invalidateQueries({ queryKey: ["code-modules"] });
@@ -173,39 +173,39 @@ export function CodeAnalysis() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2 shrink-0">
-              <Button
-                onClick={() => startAutoRun.mutate(false)}
-                disabled={!fullyAutomatic || running || startAutoRun.isPending}
-                title={
-                  fullyAutomatic
-                    ? "Analyze every screen, then generate, commit and run the tests for all of them"
-                    : 'Needs approval mode "Fully Automatic" (Settings). In other modes, open a row to approve and run it.'
-                }
-              >
-                {autoRunActive ? "Full auto running..." : "Run full auto"}
-              </Button>
+              {/* Fully Automatic mode: the same buttons drive the whole chain
+                  (analyze → plan → generate → commit → run). Other modes keep
+                  their original behaviour and stop at the human gates. */}
               <Button
                 variant="secondary"
-                onClick={() => run.mutate(true)}
-                disabled={running || run.isPending}
-                title="Re-analyze every module and behaviour, including ones already analyzed"
+                onClick={() => (fullyAutomatic ? startAutoRun.mutate({ force: true }) : run.mutate(true))}
+                disabled={running || run.isPending || startAutoRun.isPending}
+                title={
+                  fullyAutomatic
+                    ? "Re-analyze every screen and behaviour, then generate, commit and run all the tests"
+                    : "Re-analyze every module and behaviour, including ones already analyzed"
+                }
               >
                 Re-analyze all
               </Button>
-              <Button onClick={() => run.mutate(false)} disabled={running || run.isPending || analyzedCount === totalCount}>
+              <Button
+                onClick={() => (fullyAutomatic ? startAutoRun.mutate({}) : run.mutate(false))}
+                // In Fully Automatic mode this stays clickable when everything is
+                // analyzed - it still generates, commits and runs the tests.
+                disabled={running || run.isPending || startAutoRun.isPending || (!fullyAutomatic && analyzedCount === totalCount)}
+                title={fullyAutomatic ? "Analyze what's left, then generate, commit and run the tests for every screen" : undefined}
+              >
                 {running ? "Analyzing..." : "Analyze remaining modules"}
               </Button>
-              <Button onClick={() => runAll.mutate()} disabled={runAll.isPending}>
-                {runAll.isPending ? "Running..." : "Save & Run All"}
+              <Button
+                onClick={() => (fullyAutomatic ? startAutoRun.mutate({ skipAnalysis: true }) : runAll.mutate())}
+                disabled={running || runAll.isPending || startAutoRun.isPending}
+                title={fullyAutomatic ? "Generate and commit any tests not saved yet, then run every test" : undefined}
+              >
+                {runAll.isPending || (autoRunActive && autoRun?.stage === "testing") ? "Running..." : "Save & Run All"}
               </Button>
             </div>
           </div>
-          {!fullyAutomatic && settings && (
-            <p className="text-xs text-muted mt-3">
-              Full auto is off because approval mode is "{settings.approvalMode.replace(/_/g, " ")}". Switch to Fully Automatic in{" "}
-              <Link to="/settings" className="text-accent hover:underline">Settings</Link> to analyze, generate, commit and run everything with one click.
-            </p>
-          )}
           {startAutoRun.isError && <p className="text-xs text-fail mt-3">{(startAutoRun.error as Error).message}</p>}
           {autoRun && (
             <div className="mt-4 rounded-md border border-border bg-panel-2 p-3 text-xs space-y-2">

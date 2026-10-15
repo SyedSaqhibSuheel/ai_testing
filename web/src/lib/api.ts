@@ -162,7 +162,7 @@ getTestRun: (id: string) =>
   runCodeFeatures: (force?: boolean) => request<{ status: string }>("/code-analysis/features/run", { method: "POST", body: JSON.stringify({ force }) }),
   // Full auto (Fully Automatic mode): analyze the whole app, then plan → generate → commit → run every requirement
   getAutoRun: () => request<AutoRunState | null>("/code-analysis/auto-run"),
-  startAutoRun: (force?: boolean) => request<AutoRunState>("/code-analysis/auto-run", { method: "POST", body: JSON.stringify({ force }) }),
+  startAutoRun: (opts: { force?: boolean; skipAnalysis?: boolean } = {}) => request<AutoRunState>("/code-analysis/auto-run", { method: "POST", body: JSON.stringify(opts) }),
   // One click: approve scenarios → Planner → generate → commit → run, resuming from wherever the requirement is
   getPipeline: (requirementId: string) => request<PipelineState | null>(`/code-analysis/pipeline/${requirementId}`),
   runPipeline: (requirementId: string, scenarioIds: string[]) =>
