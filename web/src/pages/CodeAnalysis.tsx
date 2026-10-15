@@ -76,11 +76,18 @@ export function CodeAnalysis() {
     },
   });
 
-  // Fully Automatic mode: the existing buttons analyze the whole app, then
-  // plan, generate, commit and run every requirement. Other modes keep their
-  // human gates.
+  // The buttons follow the approval mode from Settings (server-side):
+  // Fully Automatic analyzes, plans, generates, commits and runs everything;
+  // Semi-Automatic stops for scenario and plan approval, then carries on;
+  // Manual stops after analysis.
   const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
-  const fullyAutomatic = settings?.approvalMode === "fully_automatic";
+  const mode = settings?.approvalMode ?? "manual";
+  const manual = mode === "manual";
+  const modeHint: Record<string, string> = {
+    fully_automatic: "then plans, generates, commits and runs every test",
+    semi_automatic: "then, for scenarios and plans you've approved, generates, commits and runs the tests",
+    manual: "then waits for you to approve each requirement's scenarios",
+  };
   const { data: autoRun } = useQuery({
     queryKey: ["auto-run"],
     queryFn: api.getAutoRun,
@@ -173,34 +180,29 @@ export function CodeAnalysis() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2 shrink-0">
-              {/* Fully Automatic mode: the same buttons drive the whole chain
-                  (analyze → plan → generate → commit → run). Other modes keep
-                  their original behaviour and stop at the human gates. */}
+              {/* Same buttons in every approval mode - what happens after the
+                  analysis is decided by the mode (see the comment above). */}
               <Button
                 variant="secondary"
-                onClick={() => (fullyAutomatic ? startAutoRun.mutate({ force: true }) : run.mutate(true))}
+                onClick={() => startAutoRun.mutate({ force: true })}
                 disabled={running || run.isPending || startAutoRun.isPending}
-                title={
-                  fullyAutomatic
-                    ? "Re-analyze every screen and behaviour, then generate, commit and run all the tests"
-                    : "Re-analyze every module and behaviour, including ones already analyzed"
-                }
+                title={`Re-analyze every screen and behaviour, including ones already analyzed, ${modeHint[mode]}`}
               >
                 Re-analyze all
               </Button>
               <Button
-                onClick={() => (fullyAutomatic ? startAutoRun.mutate({}) : run.mutate(false))}
-                // In Fully Automatic mode this stays clickable when everything is
-                // analyzed - it still generates, commits and runs the tests.
-                disabled={running || run.isPending || startAutoRun.isPending || (!fullyAutomatic && analyzedCount === totalCount)}
-                title={fullyAutomatic ? "Analyze what's left, then generate, commit and run the tests for every screen" : undefined}
+                onClick={() => startAutoRun.mutate({})}
+                // Manual mode has nothing more to do once everything is analyzed; the
+                // other modes still continue approved work (generate, commit, run).
+                disabled={running || run.isPending || startAutoRun.isPending || (manual && analyzedCount === totalCount)}
+                title={`Analyze what's left, ${modeHint[mode]}`}
               >
                 {running ? "Analyzing..." : "Analyze remaining modules"}
               </Button>
               <Button
-                onClick={() => (fullyAutomatic ? startAutoRun.mutate({ skipAnalysis: true }) : runAll.mutate())}
+                onClick={() => (manual ? runAll.mutate() : startAutoRun.mutate({ skipAnalysis: true }))}
                 disabled={running || runAll.isPending || startAutoRun.isPending}
-                title={fullyAutomatic ? "Generate and commit any tests not saved yet, then run every test" : undefined}
+                title={manual ? "Run every test that is already committed" : "Generate and commit tests that aren't saved yet (as far as the approval mode allows), then run every test"}
               >
                 {runAll.isPending || (autoRunActive && autoRun?.stage === "testing") ? "Running..." : "Save & Run All"}
               </Button>
@@ -214,6 +216,7 @@ export function CodeAnalysis() {
                 {autoRun.total > 0 && (
                   <span className="shrink-0 text-muted">
                     {autoRun.completed} / {autoRun.total} done
+                    {autoRun.waiting ? ` · ${autoRun.waiting} waiting for your approval` : ""}
                     {autoRun.failed ? ` · ${autoRun.failed} could not finish` : ""}
                   </span>
                 )}
@@ -236,6 +239,11 @@ export function CodeAnalysis() {
                     ))}
                   </ul>
                 </details>
+              )}
+              {autoRun.stage === "done" && autoRun.waiting > 0 && (
+                <p className="text-muted">
+                  Open a row below to approve its scenarios and plans (the approval mode is {autoRun.mode.replace(/_/g, "-")}); run again afterwards to continue.
+                </p>
               )}
               {autoRun.stage === "done" && autoRun.applicationId && (
                 <p>

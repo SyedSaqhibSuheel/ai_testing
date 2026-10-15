@@ -7,14 +7,16 @@ import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 import { runIntelligenceAgent } from "./intelligenceAgent.js";
 import { isCodeAnalysisBatchRunning, runCodeAnalysisBatch } from "./codeAnalysisAgent.js";
 import { isCodeFeatureBatchRunning, runCodeFeatureBatch } from "./codeFeatureAnalysis.js";
+import { getPlatformSettings } from "../settings/settingsService.js";
 import { isFullyAutomatic, isPipelineRunning, runRequirementPipeline } from "./requirementPipeline.js";
 
 /**
- * Fully Automatic mode, end to end. Each agent already auto-approves its own
- * gate on success, but nothing used to start the NEXT agent - so scenarios
- * were auto-approved and then sat there. These two entry points chain the
- * whole lifecycle; both only ever continue past analysis in Fully Automatic
- * mode, so Manual / Semi-Automatic keep every human gate.
+ * Each agent already auto-approves its own gate when the approval mode says
+ * so, but nothing used to start the NEXT agent - so scenarios were
+ * auto-approved and then sat there. These entry points chain the lifecycle and
+ * follow the mode from Settings: Fully Automatic runs everything, Semi-Automatic
+ * stops for scenario and plan approval (then generates, commits and runs by
+ * itself), Manual stops after analysis. A stopped requirement is "waiting", not failed.
  */
 
 /**
@@ -24,9 +26,11 @@ import { isFullyAutomatic, isPipelineRunning, runRequirementPipeline } from "./r
  */
 export async function analyzeRequirementAndContinue(db: Db, config: Config, requirementId: string, appUrl: string): Promise<void> {
   await runIntelligenceAgent(db, config, requirementId, appUrl);
-  if (!isFullyAutomatic(db, config) || isPipelineRunning(requirementId)) return;
+  if (!isFullyAutomatic(db, config) || isPipelineRunning(requirementId)) return; // other modes stop at their human gates
   await runRequirementPipeline(db, config, requirementId, { kind: "auto" }, appUrl);
 }
+
+const approvalLabel = (mode: string) => mode.replace(/_/g, "-");
 
 export type AutoRunStage = "analyzing" | "testing" | "done" | "failed";
 
@@ -39,6 +43,9 @@ export interface AutoRunState {
   completed: number;
   succeeded: number;
   failed: number;
+  /** Requirements stopped at a gate the approval mode leaves to a human. */
+  waiting: number;
+  mode: string;
   currentRequirementId?: string;
   failures: Array<{ requirementId: string; title: string; error: string }>;
   error?: string;
@@ -78,9 +85,6 @@ export interface AutoRunOptions {
 }
 
 export function startAutoRun(db: Db, config: Config, opts: AutoRunOptions = {}): AutoRunState {
-  if (!isFullyAutomatic(db, config)) {
-    throw new Error('Full auto needs the approval mode set to "Fully Automatic" (Settings). In other modes, approve each requirement from its row.');
-  }
   if (isAutoRunRunning()) throw new Error("A full auto run is already in progress");
   if (isCodeAnalysisBatchRunning() || isCodeFeatureBatchRunning()) throw new Error("A code analysis run is already in progress - wait for it to finish");
 
@@ -93,6 +97,8 @@ export function startAutoRun(db: Db, config: Config, opts: AutoRunOptions = {}):
     completed: 0,
     succeeded: 0,
     failed: 0,
+    waiting: 0,
+    mode: getPlatformSettings(db, config).approvalMode,
     failures: [],
     startedAt: new Date().toISOString(),
   };
@@ -120,7 +126,7 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
 
   const appUrl = resolveTargetAppUrl(db, config);
   const rows = db
-    .select({ id: requirements.id, title: requirements.title })
+    .select({ id: requirements.id, title: requirements.title, status: requirements.status })
     .from(requirements)
     .where(
       and(
@@ -131,6 +137,19 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
       )
     )
     .all();
+
+  // Manual mode: every gate is a human's, so after analysis there is nothing
+  // to run on their behalf - report what's waiting for approval and stop.
+  if (state.mode === "manual") {
+    state.waiting = rows.filter((r) => r.status === "awaiting_scenario_approval").length;
+    state.total = rows.length;
+    Object.assign(state, {
+      stage: "done",
+      completed: rows.length,
+      message: `Analysis finished: ${state.waiting} requirement${state.waiting === 1 ? "" : "s"} waiting for your approval (manual mode)`,
+    });
+    return;
+  }
 
   Object.assign(state, { stage: "testing", total: rows.length, message: `Generating and running tests for ${rows.length} requirement${rows.length === 1 ? "" : "s"}` });
   for (const row of rows) {
@@ -144,6 +163,7 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
     const result = await runRequirementPipeline(db, config, row.id, { kind: "auto" }, appUrl);
     state.completed++;
     if (result.stage === "done") state.succeeded++;
+    else if (result.stage === "waiting") state.waiting++;
     else {
       state.failed++;
       state.failures.push({ requirementId: row.id, title: row.title, error: result.error ?? "Unknown error" });
@@ -153,6 +173,9 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
   state.currentRequirementId = undefined;
   Object.assign(state, {
     stage: "done",
-    message: `Finished: ${state.succeeded} of ${state.total} requirement${state.total === 1 ? "" : "s"} generated and run${state.failed ? `, ${state.failed} could not be completed` : ""}`,
+    message:
+      `Finished: ${state.succeeded} of ${state.total} requirement${state.total === 1 ? "" : "s"} tested` +
+      (state.waiting ? `, ${state.waiting} waiting for your approval (${approvalLabel(state.mode)} mode)` : "") +
+      (state.failed ? `, ${state.failed} could not be completed` : ""),
   });
 }

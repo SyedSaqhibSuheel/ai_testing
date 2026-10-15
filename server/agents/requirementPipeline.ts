@@ -1,7 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { requirements, scenarios, testFiles } from "../db/schema.js";
+import { requirements, scenarios, testFiles, testFileScenarios } from "../db/schema.js";
+import { shouldAutoApprove, type GateName } from "../approval/gate.js";
 import { approveScenario } from "../scenarios/scenarioTransitions.js";
 import { approveTestFile } from "../testFiles/testFileTransitions.js";
 import { commitApprovedTestFiles } from "../git/managedRepo.js";
@@ -10,7 +11,8 @@ import { runPlannerAgent } from "./plannerAgent.js";
 import { runGeneratorAgent } from "./generatorAgent.js";
 import { getPlatformSettings } from "../settings/settingsService.js";
 
-export type PipelineStage = "approving" | "planning" | "generating" | "committing" | "running" | "done" | "failed";
+/** "waiting": stopped at a gate the current approval mode leaves to a human - nothing failed, it needs someone's approval to continue. */
+export type PipelineStage = "approving" | "planning" | "generating" | "committing" | "running" | "done" | "waiting" | "failed";
 
 export interface PipelineState {
   requirementId: string;
@@ -34,7 +36,7 @@ export function getPipelineState(requirementId: string): PipelineState | null {
 
 export function isPipelineRunning(requirementId: string): boolean {
   const state = pipelines.get(requirementId);
-  return !!state && state.stage !== "done" && state.stage !== "failed";
+  return !!state && state.stage !== "done" && state.stage !== "failed" && state.stage !== "waiting";
 }
 
 function activeScenarios(db: Db, requirementId: string) {
@@ -60,9 +62,11 @@ function latestTestFile(db: Db, requirementId: string) {
  * - "human": someone clicked the one-click pipeline for this requirement;
  *   the click is their explicit sign-off for the whole chain, so they're
  *   recorded as the approver - but only the scenarios they ticked are approved.
- * - "auto": Fully Automatic approval mode - every gate is a system
- *   auto-approval (audit log: system_auto), and every AI-proposed scenario
- *   goes through. Never used in Manual/Semi-Automatic mode.
+ * - "auto": follow the approval mode from Settings. Each gate the mode
+ *   auto-passes is a system approval (audit log: system_auto) - every gate in
+ *   Fully Automatic, only code/commit in Semi-Automatic, none in Manual. At a
+ *   gate left to a human the pipeline stops with stage "waiting" (it is not an
+ *   error) and a later run picks up from there once someone has approved.
  */
 export type PipelineApproval = { kind: "human"; actor: string; scenarioIds: string[] } | { kind: "auto" };
 
@@ -82,11 +86,19 @@ async function runPipeline(db: Db, config: Config, requirementId: string, approv
   const step = (stage: PipelineStage, message: string) => Object.assign(state, { stage, message });
   const actor = approval.kind === "human" ? approval.actor : "system";
   const actorType = approval.kind === "human" ? "human" : "system_auto";
+  // A human click signs off every gate on the chain; "auto" follows the mode.
+  const { approvalMode } = getPlatformSettings(db, config);
+  const passes = (gate: GateName) => approval.kind === "human" || shouldAutoApprove(approvalMode, gate, true);
+  const waiting = (message: string) => {
+    step("waiting", message);
+  };
 
   step("approving", "Approving scenarios");
   const selected = approval.kind === "human" ? new Set(approval.scenarioIds) : null;
-  for (const s of activeScenarios(db, requirementId)) {
-    if (s.status === "ai_proposed" && (!selected || selected.has(s.id))) approveScenario(db, s.id, actor, actorType);
+  if (passes("G1_scenario_intent")) {
+    for (const s of activeScenarios(db, requirementId)) {
+      if (s.status === "ai_proposed" && (!selected || selected.has(s.id))) approveScenario(db, s.id, actor, actorType);
+    }
   }
 
   let planned = false;
@@ -95,15 +107,28 @@ async function runPipeline(db: Db, config: Config, requirementId: string, approv
     await runPlannerAgent(db, config, requirementId, appUrl);
     planned = true;
   }
-  for (const s of activeScenarios(db, requirementId)) {
-    if (s.status === "grounded_pending_review") approveScenario(db, s.id, actor, actorType);
+  if (passes("G2_grounded_plan")) {
+    for (const s of activeScenarios(db, requirementId)) {
+      if (s.status === "grounded_pending_review") approveScenario(db, s.id, actor, actorType);
+    }
   }
-  const readyForGeneration = activeScenarios(db, requirementId).some((s) => s.status === "approved_for_generation");
+  const live = activeScenarios(db, requirementId);
+  const readyIds = live.filter((s) => s.status === "approved_for_generation").map((s) => s.id);
+  const readyForGeneration = readyIds.length > 0;
 
   let file = latestTestFile(db, requirementId);
-  const needsGeneration = planned || !file || file.status === "rejected" || file.status === "syntax_invalid";
+  // Scenarios approved for generation that the latest test file doesn't cover
+  // yet (e.g. a human just approved their plans) need a new generation.
+  const covered = new Set(file ? db.select({ id: testFileScenarios.scenarioId }).from(testFileScenarios).where(eq(testFileScenarios.testFileId, file.id)).all().map((r) => r.id) : []);
+  const hasUncovered = readyIds.some((id) => !covered.has(id));
+  const needsGeneration = planned || hasUncovered || !file || file.status === "rejected" || file.status === "syntax_invalid";
   if (needsGeneration) {
     if (!readyForGeneration) {
+      const pendingG1 = live.some((s) => s.status === "ai_proposed");
+      const pendingG2 = live.some((s) => s.status === "grounded_pending_review");
+      if (pendingG1 && !planned) return waiting("Waiting for you to approve the proposed scenarios");
+      if (pendingG2) return waiting("Waiting for you to review the grounded plans and send them to generation");
+      if (pendingG1) return waiting("Waiting for you to approve the proposed scenarios");
       throw new Error(
         planned
           ? "The Planner did not produce a grounded plan for any scenario - check Agent Activity (is Chrome/Playwright available to the server?)."
@@ -127,9 +152,13 @@ async function runPipeline(db: Db, config: Config, requirementId: string, approv
   if (file.status === "syntax_invalid") {
     throw new Error(`The generated test failed validation, so it was not committed: ${file.validationError ?? "unknown error"}. Regenerate it from the test card below.`);
   }
-  if (file.status === "syntax_valid") approveTestFile(db, file.id, actor, actorType);
+  if (file.status === "syntax_valid") {
+    if (!passes("G3_generated_code")) return waiting("Waiting for you to approve the generated test code");
+    approveTestFile(db, file.id, actor, actorType);
+  }
 
   if (db.select({ status: testFiles.status }).from(testFiles).where(eq(testFiles.id, file.id)).get()?.status === "approved") {
+    if (!passes("G4_commit")) return waiting("Waiting for you to approve the commit of the generated tests");
     step("committing", "Committing the test to the managed tests repo");
     const requirement = db.select({ title: requirements.title }).from(requirements).where(eq(requirements.id, requirementId)).get();
     await commitApprovedTestFiles(db, config, [file.id], `Add generated tests for: ${requirement?.title ?? requirementId}`, actor);
