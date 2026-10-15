@@ -3,9 +3,10 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { URLConfigService } from "../config/urlConfigService.js";
-import { scenarios } from "../db/schema.js";
+import { requirements, scenarios } from "../db/schema.js";
 import { approveScenario, rejectScenario, deleteScenario, editScenario } from "../scenarios/scenarioTransitions.js";
 import { regenerateScenario } from "../agents/intelligenceAgent.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 export function scenariosRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
@@ -31,8 +32,12 @@ export function scenariosRouter(db: Db, config: Config, urlConfigService?: URLCo
       .insert(scenarios)
       .values({
         requirementId: b.requirementId,
-applicationId: typeof b.applicationId === "string" ? b.applicationId : null, 
-sourceType: "user_added",
+        // Default to the requirement's application so it shows under Test Case Management.
+        applicationId:
+          typeof b.applicationId === "string"
+            ? b.applicationId
+            : (db.select({ applicationId: requirements.applicationId }).from(requirements).where(eq(requirements.id, b.requirementId)).get()?.applicationId ?? null),
+        sourceType: "user_added",
         title: b.title,
         description: b.description,
         priority: b.priority ?? "medium",
@@ -106,10 +111,7 @@ sourceType: "user_added",
   router.post("/:id/regenerate", async (req, res) => {
     try {
       const { actor, feedback } = req.body ?? {};
-      if (!urlConfigService) {
-        return res.status(500).json({ error: "URL Config Service not initialized" });
-      }
-      const activeAppBaseUrl = urlConfigService.getActiveConfig().appBaseUrl;
+      const activeAppBaseUrl = resolveTargetAppUrl(db, config, urlConfigService);
       const newId = await regenerateScenario(db, config, req.params.id, typeof actor === "string" ? actor : "unknown", feedback, activeAppBaseUrl);
       res.json(db.select().from(scenarios).where(eq(scenarios.id, newId)).get());
     } catch (err) {

@@ -3,9 +3,10 @@ import { and, desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { requirements, requirementAnalyses, scenarios } from "../db/schema.js";
-import { runIntelligenceAgent } from "../agents/intelligenceAgent.js";
+import { analyzeRequirementAndContinue } from "../agents/autoPipeline.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
 import { getActiveApplication } from "../config/activeApplication.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 export function requirementsRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
@@ -31,6 +32,15 @@ export function requirementsRouter(db: Db, config: Config, urlConfigService?: UR
       })
       .returning()
       .get();
+    // Submitting a requirement is the request to test it: the AI turns it
+    // into test cases right away (pass analyze:false to only save it). In
+    // Fully Automatic mode it carries on through plan → generate → commit →
+    // run; in the other modes it stops at scenario approval as before.
+    if (req.body?.analyze !== false) {
+      analyzeRequirementAndContinue(db, config, row.id, resolveTargetAppUrl(db, config, urlConfigService)).catch((err) => {
+        console.error(`Analysis failed for new requirement ${row.id}:`, err);
+      });
+    }
     res.status(201).json(row);
   });
 
@@ -86,9 +96,9 @@ export function requirementsRouter(db: Db, config: Config, urlConfigService?: UR
       return;
     }
     // Fire-and-forget: analysis can take a while (real LLM call). The client
-    // polls GET /:id or the agent-runs feed for progress.
-    const activeAppBaseUrl = urlConfigService?.getActiveConfig().appBaseUrl;
-    runIntelligenceAgent(db, config, req.params.id, activeAppBaseUrl).catch((err) => {
+    // polls GET /:id or the agent-runs feed for progress. Fully Automatic
+    // mode continues into plan → generate → commit → run.
+    analyzeRequirementAndContinue(db, config, req.params.id, resolveTargetAppUrl(db, config, urlConfigService)).catch((err) => {
       console.error(`Intelligence agent failed for requirement ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "analyzing" });

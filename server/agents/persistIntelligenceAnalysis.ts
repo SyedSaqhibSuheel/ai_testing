@@ -13,10 +13,15 @@ export function insertScenarioFromDraft(
   requirementId: string,
   analysisId: string | null
 ): string {
+  // Test Case Management lists an application's test cases (and their runs)
+  // by scenarios.applicationId - inherit it from the requirement, or the
+  // AI-generated cases never show up there.
+  const requirement = db.select({ applicationId: requirements.applicationId }).from(requirements).where(eq(requirements.id, requirementId)).get();
   const row = db
     .insert(scenarios)
     .values({
       requirementId,
+      applicationId: requirement?.applicationId ?? null,
       analysisId: analysisId ?? undefined,
       sourceType: "ai_generated",
       title: draft.title,

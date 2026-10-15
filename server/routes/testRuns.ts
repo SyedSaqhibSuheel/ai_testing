@@ -8,10 +8,13 @@ import {
   testRunCases,
   testFileScenarios,
   scenarios,
+  applications,
+  requirements,
 } from "../db/schema.js";
+import { getActiveApplication } from "../config/activeApplication.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
-import { getPlatformSettings } from "../settings/settingsService.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 export function testRunsRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
@@ -142,14 +145,8 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
       res.status(404).json({ error: "Test file not found" });
       return;
     }
-    // Resolve the app URL to run against. Preferred source: the DB-persisted
-    // testAppUrl setting (same one the Generator and Planner use). The
-    // urlConfigService "active profile" is in-memory only - it resets to
-    // "default" (localhost) on every server restart - so it's just a
-    // last-resort fallback, never allowed to override an explicit testAppUrl.
-    const settings = getPlatformSettings(db, config);
-    const activeUrlConfig = urlConfigService ? urlConfigService.getActiveConfig() : { appBaseUrl: config.appBaseUrl };
-    const targetAppUrl = settings.testAppUrl || activeUrlConfig.appBaseUrl;
+    // Same resolution as the Planner and Generator: the active Application first.
+    const targetAppUrl = resolveTargetAppUrl(db, config, urlConfigService);
     // Fire-and-forget, matching every other agent trigger in this app - the
     // client polls GET /api/test-runs?testFileId=... for the new run.
     runPlaywrightTest(db, config, req.params.id, "manual", targetAppUrl).catch((err) => {
@@ -158,14 +155,25 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
     res.status(202).json({ status: "running" });
   });
 
-  router.post("/run-all", async (_req, res) => {
+  router.post("/run-all", async (req, res) => {
   try {
+    // One application's tests at a time - the page's application if given
+    // (Test Case Management), else the active one - run against that
+    // application's own URL. Running every app's files against one URL
+    // would fail all the other apps' tests for nothing.
+    const application =
+      typeof req.body?.applicationId === "string"
+        ? db.select().from(applications).where(eq(applications.id, req.body.applicationId)).get()
+        : getActiveApplication(db);
+    const appRequirementIds = application
+      ? new Set(db.select({ id: requirements.id }).from(requirements).where(eq(requirements.applicationId, application.id)).all().map((r) => r.id))
+      : null;
     const files = db
       .select()
       .from(testFiles)
       .where(eq(testFiles.isLatest, true))
       .all()
-      .filter((file) => file.status === "committed");
+      .filter((file) => file.status === "committed" && (!appRequirementIds || appRequirementIds.has(file.requirementId)));
 
     if (files.length === 0) {
       res.status(400).json({
@@ -174,25 +182,23 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
       return;
     }
 
-    const settings = getPlatformSettings(db, config);
-    const activeUrlConfig = urlConfigService
-      ? urlConfigService.getActiveConfig()
-      : { appBaseUrl: config.appBaseUrl };
+    const targetAppUrl = application?.appBaseUrl || resolveTargetAppUrl(db, config, urlConfigService);
 
-    const targetAppUrl =
-      settings.testAppUrl || activeUrlConfig.appBaseUrl;
-
-    // Fire-and-forget, matching every other agent/test trigger in this app
-    // (see the single-file /:id/run route above) - each run is a real
-    // Playwright process that can take anywhere from seconds to a minute+,
-    // so awaiting all of them here before responding would leave the
-    // request hanging for however long the slowest of N files takes. The
-    // client polls GET /api/test-runs?testFileId=... per file for results.
-    for (const file of files) {
-      runPlaywrightTest(db, config, file.id, "manual", targetAppUrl).catch((err) => {
-        console.error(`Run-all: test run failed for test file ${file.id}:`, err);
-      });
-    }
+    // Fire-and-forget the WHOLE batch (so the request still returns
+    // immediately, same as before) but run the files themselves one at a
+    // time, not concurrently - these all hit the same app with the same
+    // login session and the same shared seed data, so N of them racing in
+    // parallel step on each other's state and fail nondeterministically in
+    // ways none of them would alone. The client polls
+    // GET /api/test-runs?testFileId=... per file for results as each
+    // finishes.
+    (async () => {
+      for (const file of files) {
+        await runPlaywrightTest(db, config, file.id, "manual", targetAppUrl).catch((err) => {
+          console.error(`Run-all: test run failed for test file ${file.id}:`, err);
+        });
+      }
+    })();
 
     res.status(202).json({
       status: "running",

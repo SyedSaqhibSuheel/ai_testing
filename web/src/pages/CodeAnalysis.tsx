@@ -70,11 +70,44 @@ export function CodeAnalysis() {
   }, [featureData, autoAnalyze]);
 
   const runAll = useMutation({
-    mutationFn: api.runAllTests,
+    mutationFn: () => api.runAllTests(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["test-runs"] });
     },
   });
+
+  // The buttons follow the approval mode from Settings (server-side):
+  // Fully Automatic analyzes, plans, generates, commits and runs everything;
+  // Semi-Automatic stops for scenario and plan approval, then carries on;
+  // Manual stops after analysis.
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
+  const mode = settings?.approvalMode ?? "manual";
+  const manual = mode === "manual";
+  const modeHint: Record<string, string> = {
+    fully_automatic: "then plans, generates, commits and runs every test",
+    semi_automatic: "then, for scenarios and plans you've approved, generates, commits and runs the tests",
+    manual: "then waits for you to approve each requirement's scenarios",
+  };
+  const { data: autoRun } = useQuery({
+    queryKey: ["auto-run"],
+    queryFn: api.getAutoRun,
+    refetchInterval: (query) => (query.state.data && (query.state.data.stage === "analyzing" || query.state.data.stage === "testing") ? 3000 : false),
+  });
+  const autoRunActive = !!autoRun && (autoRun.stage === "analyzing" || autoRun.stage === "testing");
+  const startAutoRun = useMutation({
+    mutationFn: (opts: { force?: boolean; skipAnalysis?: boolean }) => api.startAutoRun(opts),
+    onSuccess: (state) => {
+      queryClient.setQueryData(["auto-run"], state);
+      queryClient.invalidateQueries({ queryKey: ["code-modules"] });
+      queryClient.invalidateQueries({ queryKey: ["code-features"] });
+    },
+  });
+  // Refresh rows and test runs as the auto run moves from one requirement to the next.
+  useEffect(() => {
+    if (!autoRun) return;
+    queryClient.invalidateQueries({ queryKey: ["requirement"] });
+    queryClient.invalidateQueries({ queryKey: ["test-runs"] });
+  }, [autoRun?.completed, autoRun?.stage, queryClient]);
 
   const modules = data?.modules ?? [];
   const features = (featureData?.features ?? []).filter((f) => f.files.length > 0);
@@ -84,7 +117,7 @@ export function CodeAnalysis() {
   const isAnalyzed = (r: { requirementId: string | null; requirementStatus: RequirementStatus | null }) => !!r.requirementId && r.requirementStatus !== "failed";
   const analyzedCount = modules.filter(isAnalyzed).length + features.filter(isAnalyzed).length;
   const totalCount = modules.length + features.length;
-  const running = (data?.running ?? false) || (featureData?.running ?? false);
+  const running = (data?.running ?? false) || (featureData?.running ?? false) || autoRunActive;
 
   const rows: SourceRow[] = [
     ...modules.map((m) => ({
@@ -127,7 +160,14 @@ export function CodeAnalysis() {
           </Card>
         ) : (
         <Card className="p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          {(active?.missingSourceDirs?.length ?? 0) > 0 && (
+            <p className="text-xs text-fail mb-4">
+              Some source folders configured for {appName} don't exist, so they're skipped:{" "}
+              {active!.missingSourceDirs!.map((d) => d.path).join(", ")}. Fix them on the{" "}
+              <Link to="/applications" className="text-accent hover:underline">Applications</Link> page.
+            </p>
+          )}
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <div className="text-sm font-medium">
                 {totalCount === 0 ? "Scanning source..." : `${analyzedCount} / ${totalCount} ${appName} screens & behaviours analyzed`}
@@ -139,23 +179,80 @@ export function CodeAnalysis() {
                 proposes draft test scenarios. Open any analyzed row to approve its scenarios and generate and run its tests.
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-wrap gap-2 shrink-0">
+              {/* Same buttons in every approval mode - what happens after the
+                  analysis is decided by the mode (see the comment above). */}
               <Button
                 variant="secondary"
-                onClick={() => run.mutate(true)}
-                disabled={running || run.isPending}
-                title="Re-analyze every module and behaviour, including ones already analyzed"
+                onClick={() => startAutoRun.mutate({ force: true })}
+                disabled={running || run.isPending || startAutoRun.isPending}
+                title={`Re-analyze every screen and behaviour, including ones already analyzed, ${modeHint[mode]}`}
               >
                 Re-analyze all
               </Button>
-              <Button onClick={() => run.mutate(false)} disabled={running || run.isPending || analyzedCount === totalCount}>
+              <Button
+                onClick={() => startAutoRun.mutate({})}
+                // Manual mode has nothing more to do once everything is analyzed; the
+                // other modes still continue approved work (generate, commit, run).
+                disabled={running || run.isPending || startAutoRun.isPending || (manual && analyzedCount === totalCount)}
+                title={`Analyze what's left, ${modeHint[mode]}`}
+              >
                 {running ? "Analyzing..." : "Analyze remaining modules"}
               </Button>
-              <Button onClick={() => runAll.mutate()} disabled={runAll.isPending}>
-                {runAll.isPending ? "Running..." : "Save & Run All"}
+              <Button
+                onClick={() => (manual ? runAll.mutate() : startAutoRun.mutate({ skipAnalysis: true }))}
+                disabled={running || runAll.isPending || startAutoRun.isPending}
+                title={manual ? "Run every test that is already committed" : "Generate and commit tests that aren't saved yet (as far as the approval mode allows), then run every test"}
+              >
+                {runAll.isPending || (autoRunActive && autoRun?.stage === "testing") ? "Running..." : "Save & Run All"}
               </Button>
             </div>
           </div>
+          {startAutoRun.isError && <p className="text-xs text-fail mt-3">{(startAutoRun.error as Error).message}</p>}
+          {autoRun && (
+            <div className="mt-4 rounded-md border border-border bg-panel-2 p-3 text-xs space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className={autoRun.stage === "failed" ? "text-fail" : autoRunActive ? "text-accent" : "text-text"}>{autoRun.message}</span>
+                {autoRun.total > 0 && (
+                  <span className="shrink-0 text-muted">
+                    {autoRun.completed} / {autoRun.total} done
+                    {autoRun.waiting ? ` · ${autoRun.waiting} waiting for your approval` : ""}
+                    {autoRun.failed ? ` · ${autoRun.failed} could not finish` : ""}
+                  </span>
+                )}
+              </div>
+              {autoRun.total > 0 && (
+                <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                  <div className="h-full bg-accent transition-all" style={{ width: `${Math.round((autoRun.completed / autoRun.total) * 100)}%` }} />
+                </div>
+              )}
+              {autoRun.error && <p className="text-fail">{autoRun.error}</p>}
+              {autoRun.failures.length > 0 && (
+                <details>
+                  <summary className="cursor-pointer text-muted">Requirements that could not finish ({autoRun.failures.length})</summary>
+                  <ul className="mt-2 space-y-1">
+                    {autoRun.failures.map((f) => (
+                      <li key={f.requirementId}>
+                        <Link to={`/requirements/${f.requirementId}`} className="text-accent hover:underline">{f.title}</Link>
+                        <span className="text-muted"> - {f.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {autoRun.stage === "done" && autoRun.waiting > 0 && (
+                <p className="text-muted">
+                  Open a row below to approve its scenarios and plans (the approval mode is {autoRun.mode.replace(/_/g, "-")}); run again afterwards to continue.
+                </p>
+              )}
+              {autoRun.stage === "done" && autoRun.applicationId && (
+                <p>
+                  Reports are under{" "}
+                  <Link to={`/test-case-management/${autoRun.applicationId}`} className="text-accent hover:underline">Test Case Management</Link>.
+                </p>
+              )}
+            </div>
+          )}
           {run.isError && <p className="text-xs text-fail mt-3">{(run.error as Error).message}</p>}
           {autoAnalyze.isError && <p className="text-xs text-fail mt-3">{(autoAnalyze.error as Error).message}</p>}
           {runAll.isError && <p className="text-xs text-fail mt-3">{(runAll.error as Error).message}</p>}

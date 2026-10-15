@@ -50,7 +50,7 @@ const {
 });
 
 const runAll = useMutation({
-  mutationFn: api.runAllTests,
+  mutationFn: () => api.runAllTests(id),
   onSuccess: () => {
     queryClient.invalidateQueries({ queryKey: ["test-runs"] });
   },

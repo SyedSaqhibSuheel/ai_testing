@@ -5,6 +5,7 @@ import type { URLConfigService } from "../config/urlConfigService.js";
 import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 import { isCodeFeatureBatchRunning, listCodeFeatures, runCodeFeatureBatch } from "../agents/codeFeatureAnalysis.js";
 import { getPipelineState, startRequirementPipeline } from "../agents/requirementPipeline.js";
+import { getAutoRunState, startAutoRun } from "../agents/autoPipeline.js";
 
 /**
  * Additions to the Code Analysis page that sit next to (not inside) the
@@ -29,6 +30,21 @@ export function codeAnalysisWorkflowRouter(db: Db, config: Config, urlConfigServ
       console.error("Code feature analysis batch failed:", err);
     });
     res.status(202).json({ status: "running" });
+  });
+
+  // Full auto (Fully Automatic mode only): analyze the whole active app, then
+  // plan → generate → commit → run every resulting requirement. The client
+  // polls GET /auto-run for progress.
+  router.get("/auto-run", (_req, res) => {
+    res.json(getAutoRunState());
+  });
+
+  router.post("/auto-run", (req, res) => {
+    try {
+      res.status(202).json(startAutoRun(db, config, { force: req.body?.force === true, skipAnalysis: req.body?.skipAnalysis === true }));
+    } catch (err) {
+      res.status(409).json({ error: err instanceof Error ? err.message : String(err) });
+    }
   });
 
   router.get("/pipeline/:requirementId", (req, res) => {
