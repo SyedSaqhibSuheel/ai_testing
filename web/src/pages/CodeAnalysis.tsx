@@ -160,7 +160,7 @@ export function CodeAnalysis() {
               <Link to="/applications" className="text-accent hover:underline">Applications</Link> page.
             </p>
           )}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <div className="text-sm font-medium">
                 {totalCount === 0 ? "Scanning source..." : `${analyzedCount} / ${totalCount} ${appName} screens & behaviours analyzed`}
