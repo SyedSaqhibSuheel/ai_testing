@@ -10,6 +10,7 @@ import { getProvider } from "../../src/llm/index.js";
 import { IntelligenceAnalysisSchema, type IntelligenceAnalysis } from "../schemas/analysis.js";
 import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } from "./agentRunTracking.js";
 import { persistIntelligenceAnalysis } from "./persistIntelligenceAnalysis.js";
+import { beginCodeAnalysisRequirement, retireScenarios } from "./codeAnalysisRequirement.js";
 import { isCodeAnalysisBatchRunning } from "./codeAnalysisAgent.js";
 import { resolveAppConfig } from "../config/activeApplication.js";
 import { describeApp } from "./appDescriptor.js";
@@ -266,19 +267,12 @@ async function callLlm(config: Config, user: string): Promise<IntelligenceAnalys
 }
 
 async function analyzeFeature(db: Db, config: Config, feature: CodeFeature, files: FeatureFile[]): Promise<void> {
-  const requirement = db
-    .insert(requirements)
-    .values({
-      title: `Code Analysis: ${feature.title}`,
-      rawText: buildRequirementText(feature, files, config.applicationName),
-      submittedBy: "code-analysis-agent",
-      source: "code_analysis",
-      sourceModule: feature.name,
-      status: "analyzing",
-      applicationId: config.applicationId,
-    })
-    .returning()
-    .get();
+  const { requirement, statusOnFailure } = beginCodeAnalysisRequirement(db, {
+    applicationId: config.applicationId,
+    sourceModule: feature.name,
+    title: `Code Analysis: ${feature.title}`,
+    rawText: buildRequirementText(feature, files, config.applicationName),
+  });
 
   const runId = startAgentRun(db, {
     agentType: "code_analysis",
@@ -289,10 +283,11 @@ async function analyzeFeature(db: Db, config: Config, feature: CodeFeature, file
     updateAgentRunTask(db, runId, `Analyzing: ${feature.title}`);
     const analysis = await callLlm(config, buildUserPrompt(config, feature, files));
     const { analysisId, scenarioCount } = persistIntelligenceAnalysis(db, config, requirement.id, runId, analysis);
+    retireScenarios(db, requirement.id, analysisId);
     completeAgentRun(db, runId, { analysisId, scenarioCount });
   } catch (err) {
     failAgentRun(db, runId, err instanceof Error ? err.message : String(err));
-    db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirement.id)).run();
+    db.update(requirements).set({ status: statusOnFailure, updatedAt: new Date() }).where(eq(requirements.id, requirement.id)).run();
     throw err;
   }
 }
