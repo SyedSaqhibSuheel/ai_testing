@@ -5,7 +5,7 @@ import type { Config } from "../../src/config.js";
 import { requirements } from "../db/schema.js";
 import { runPlannerAgent, getLatestExplorationRun } from "../agents/plannerAgent.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
-import { getPlatformSettings } from "../settings/settingsService.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 export function planRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
   const router = Router();
@@ -17,15 +17,8 @@ export function planRouter(db: Db, config: Config, urlConfigService?: URLConfigS
       return;
     }
 
-    // Resolve the app URL to explore. Preferred source: the DB-persisted
-    // testAppUrl setting (same one the Generator uses, editable from the
-    // "Application under test" Settings section). urlConfigService's "active
-    // profile" is in-memory only - it resets to "default" (localhost) on
-    // every server restart - so it's used only as a last-resort fallback,
-    // never allowed to override an explicit testAppUrl.
-    const settings = getPlatformSettings(db, config);
-    const activeUrlConfig = urlConfigService ? urlConfigService.getActiveConfig() : { appBaseUrl: config.appBaseUrl, apiBaseUrl: config.apiBaseUrl };
-    const targetAppUrl = settings.testAppUrl || activeUrlConfig.appBaseUrl;
+    // Same resolution as the Generator and test runs: the active Application first.
+    const targetAppUrl = resolveTargetAppUrl(db, config, urlConfigService);
 
     runPlannerAgent(db, config, req.params.id, targetAppUrl).catch((err) => {
       console.error(`Planner agent failed for requirement ${req.params.id}:`, err);

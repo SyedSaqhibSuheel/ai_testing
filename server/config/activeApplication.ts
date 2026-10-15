@@ -79,6 +79,20 @@ export function hasSourceAccess(config: Config): boolean {
   return existsSync(config.backendSrcDir) || existsSync(config.frontendSrcDir);
 }
 
+/** Source directories the active app has configured that don't exist on disk (so scanning them silently finds nothing). */
+export function missingSourceDirs(config: Config): Array<{ field: "backendSrcDir" | "frontendSrcDir" | "frontendServerSrcDir"; path: string }> {
+  return (["backendSrcDir", "frontendSrcDir", "frontendServerSrcDir"] as const)
+    .filter((field) => !!config[field] && !existsSync(config[field]))
+    .map((field) => ({ field, path: config[field] }));
+}
+
+export function warnMissingSourceDirs(db: Db, baseConfig: Config): void {
+  const config = resolveAppConfig(db, baseConfig);
+  for (const { field, path } of missingSourceDirs(config)) {
+    console.warn(`Active application "${config.applicationName ?? "(none)"}": ${field} does not exist (${path}) - code scans will skip it. Fix it on the Applications page.`);
+  }
+}
+
 /**
  * Seeds the very first Application from today's .env values, so upgrading
  * onto multi-app support doesn't lose or reset the app this platform was

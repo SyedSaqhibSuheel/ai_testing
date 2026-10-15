@@ -3,7 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { applications } from "../db/schema.js";
-import { getActiveApplication, setActiveApplication, hasSourceAccess, resolveAppConfig } from "../config/activeApplication.js";
+import { getActiveApplication, setActiveApplication, hasSourceAccess, missingSourceDirs, resolveAppConfig } from "../config/activeApplication.js";
 
 type ApplicationRow = typeof applications.$inferSelect;
 
@@ -48,6 +48,7 @@ export function applicationsRouter(db: Db, config: Config): Router {
     res.json({
       application: active ? maskApplication(active) : null,
       hasSourceAccess: hasSourceAccess(resolved),
+      missingSourceDirs: missingSourceDirs(resolved),
     });
   });
 

@@ -34,6 +34,8 @@ export interface ApplicationInput {
 export interface ActiveApplication {
   application: Application | null;
   hasSourceAccess: boolean;
+  /** Configured source directories that don't exist on disk. */
+  missingSourceDirs?: Array<{ field: string; path: string }>;
 }
 
 
@@ -98,6 +100,22 @@ export interface PipelineState {
   error?: string;
   testFileId?: string;
   testRunId?: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
+/** Full auto run for the whole active application (server/agents/autoPipeline.ts). */
+export interface AutoRunState {
+  applicationId?: string;
+  stage: "analyzing" | "testing" | "done" | "failed";
+  message: string;
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  currentRequirementId?: string;
+  failures: Array<{ requirementId: string; title: string; error: string }>;
+  error?: string;
   startedAt: string;
   finishedAt?: string;
 }

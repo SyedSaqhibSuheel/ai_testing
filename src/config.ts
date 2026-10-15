@@ -83,6 +83,17 @@ function toBool(value: string | undefined, fallback: boolean): boolean {
   return value.toLowerCase() === "true" || value === "1";
 }
 
+/**
+ * A source directory, resolved against the framework root. Blank (set but
+ * empty, or an empty fallback) means "no source for this part of the app" -
+ * never path.resolve(ROOT_DIR, ""), which would point the scanner at this
+ * platform's own code.
+ */
+function sourceDir(value: string | undefined, fallback: string): string {
+  const dir = (value ?? fallback).trim();
+  return dir ? path.resolve(ROOT_DIR, dir) : "";
+}
+
 export function loadConfig(): Config {
   const env = process.env as unknown as Record<string, string | undefined>;
   const raw = {
@@ -93,9 +104,11 @@ export function loadConfig(): Config {
     openaiModel: env.OPENAI_MODEL ?? "gpt-4o",
     geminiApiKey: env.GEMINI_API_KEY || undefined,
     geminiModel: env.GEMINI_MODEL ?? "gemini-flash-lite-latest",
-    backendSrcDir: path.resolve(ROOT_DIR, env.BACKEND_SRC_DIR ?? "../fidar-server/src/main/java"),
-    frontendSrcDir: path.resolve(ROOT_DIR, env.FRONTEND_SRC_DIR ?? "../CallCenterUI/client/src"),
-    frontendServerSrcDir: path.resolve(ROOT_DIR, env.FRONTEND_SERVER_SRC_DIR ?? "../CallCenterUI/server"),
+    // No backend source by default: there's no sibling ../fidar-server in this
+    // layout, and guessing one just made every scan silently find nothing.
+    backendSrcDir: sourceDir(env.BACKEND_SRC_DIR, ""),
+    frontendSrcDir: sourceDir(env.FRONTEND_SRC_DIR, "../CallCenterUI/client/src"),
+    frontendServerSrcDir: sourceDir(env.FRONTEND_SERVER_SRC_DIR, "../CallCenterUI/server"),
     appBaseUrl: env.APP_BASE_URL ?? "http://localhost:5000",
     apiBaseUrl: env.API_BASE_URL ?? "http://localhost:8084/fidar/sdk/api",
     appAuthToken: env.APP_AUTH_TOKEN || undefined,

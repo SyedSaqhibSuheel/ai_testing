@@ -3,6 +3,7 @@ import type {
   ActiveApplication,
   AgentRun,
   AddedCodeRequirementSummary,
+  AutoRunState,
   Application,
   ApplicationInput,
   CodeFeatureSummary,
@@ -93,12 +94,14 @@ activateApplication: (id: string) => request<Application>(`/applications/${id}/a
   regenerateTestFile: (id: string) => request<TestFile>(`/test-files/${id}/regenerate`, { method: "POST" }),
   runTestFile: (id: string) => request(`/test-files/${id}/run`, { method: "POST" }),
 
-  runAllTests: () =>
+  /** Runs the latest committed test files of one application (default: the active one). */
+  runAllTests: (applicationId?: string) =>
   request<{
     status: string;
     testFileCount: number;
    }>("/test-files/run-all", {
     method: "POST",
+    body: JSON.stringify({ applicationId }),
   }),
 
 
@@ -157,6 +160,9 @@ getTestRun: (id: string) =>
   // Cross-cutting behaviours (Theme, Action Buttons, Status, Navigation) derived from the source
   listCodeFeatures: () => request<{ features: CodeFeatureSummary[]; running: boolean }>("/code-analysis/features"),
   runCodeFeatures: (force?: boolean) => request<{ status: string }>("/code-analysis/features/run", { method: "POST", body: JSON.stringify({ force }) }),
+  // Full auto (Fully Automatic mode): analyze the whole app, then plan → generate → commit → run every requirement
+  getAutoRun: () => request<AutoRunState | null>("/code-analysis/auto-run"),
+  startAutoRun: (force?: boolean) => request<AutoRunState>("/code-analysis/auto-run", { method: "POST", body: JSON.stringify({ force }) }),
   // One click: approve scenarios → Planner → generate → commit → run, resuming from wherever the requirement is
   getPipeline: (requirementId: string) => request<PipelineState | null>(`/code-analysis/pipeline/${requirementId}`),
   runPipeline: (requirementId: string, scenarioIds: string[]) =>

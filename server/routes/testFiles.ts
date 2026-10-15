@@ -6,9 +6,10 @@ import { requirements, testFiles, testFileScenarios } from "../db/schema.js";
 import { runGeneratorAgent } from "../agents/generatorAgent.js";
 import { approveTestFile, rejectTestFile } from "../testFiles/testFileTransitions.js";
 import type { URLConfigService } from "../config/urlConfigService.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 export function testFilesRouter(db: Db, config: Config, urlConfigService?: URLConfigService): Router {
-  const activeAppBaseUrl = () => urlConfigService?.getActiveConfig().appBaseUrl;
+  const activeAppBaseUrl = () => resolveTargetAppUrl(db, config, urlConfigService);
   const router = Router();
 
   router.get("/", (req, res) => {
@@ -95,7 +96,7 @@ export function generateRouter(db: Db, config: Config, urlConfigService?: URLCon
       res.status(404).json({ error: "Requirement not found" });
       return;
     }
-    runGeneratorAgent(db, config, req.params.id, urlConfigService?.getActiveConfig().appBaseUrl).catch((err) => {
+    runGeneratorAgent(db, config, req.params.id, resolveTargetAppUrl(db, config, urlConfigService)).catch((err) => {
       console.error(`Generator agent failed for requirement ${req.params.id}:`, err);
     });
     res.status(202).json({ status: "generating_tests" });
