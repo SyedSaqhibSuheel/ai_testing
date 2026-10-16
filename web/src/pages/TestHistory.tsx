@@ -1,13 +1,27 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Clock3, Globe, History, RotateCw, Search, UserRound, X, Zap } from "lucide-react";
 import { api } from "@/lib/api";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { PageHeader } from "@/components/PageHeader";
 import { formatDuration, TestRunCaseRow } from "@/components/TestRunCaseRow";
+import {
+  EmptyState,
+  ErrorState,
+  PageBody,
+  PageHeader,
+  PageShell,
+  ProgressBar,
+  SelectField,
+  SkeletonRows,
+  StatusPill,
+  Surface,
+  TONE,
+  TextAction,
+  TextInput,
+  cx,
+  inputClass,
+  statusTone,
+} from "@/components/workspace/kit";
 import type { TestHistoryEntry, TestRunStatus } from "@/lib/types";
 
 // "Test Cases" hierarchy: Website -> Date -> Test Case -> Execution.
@@ -41,21 +55,8 @@ function useToggle(initial: Iterable<string> = []) {
   return { expanded, toggle };
 }
 
-function CollapsibleHeader({
-  open,
-  onToggle,
-  children,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button onClick={onToggle} className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-panel-2 transition-colors">
-      <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
-      {children}
-    </button>
-  );
+function Chevron({ open, className }: { open: boolean; className?: string }) {
+  return <ChevronRight className={cx("h-4 w-4 shrink-0 text-muted transition-transform duration-200", open && "rotate-90", className)} />;
 }
 
 function ExecutionRow({ entry }: { entry: TestHistoryEntry }) {
@@ -65,29 +66,42 @@ function ExecutionRow({ entry }: { entry: TestHistoryEntry }) {
     queryFn: () => api.getTestRun(entry.testRunId),
     enabled: open,
   });
+  const auto = entry.triggeredBy === "auto_after_commit";
 
   return (
-    <div className="border-t border-border first:border-t-0">
-      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-panel-2">
-        <span className="flex items-center gap-2">
-          <StatusBadge status={entry.status} />
-          <span className="text-muted">{entry.triggeredBy === "auto_after_commit" ? "auto (after commit)" : "manual"}</span>
+    <div className="relative">
+      <span className={cx("absolute -left-[4.5px] top-[17px] h-2 w-2 rounded-full", TONE[statusTone(entry.status)].dot)} />
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full flex-col gap-2 rounded-lg py-2 pl-5 pr-3 text-left text-sm transition-colors hover:bg-panel-2/50 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <span className="flex items-center gap-3">
+          <StatusPill status={entry.status} />
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+            {auto ? <Zap className="h-3 w-3" /> : <UserRound className="h-3 w-3" />}
+            {auto ? "auto (after commit)" : "manual"}
+          </span>
         </span>
-        <span className="flex items-center gap-3 text-muted">
+        <span className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted">
           {entry.totalTests != null && (
-            <span className="mono">
-              <span className="text-pass">{entry.passedCount}</span>/{entry.totalTests} passed
+            <span className="tabular-nums">
+              <span className="font-medium text-pass">{entry.passedCount}</span>/{entry.totalTests} passed
             </span>
           )}
-          <span className="mono">{formatDuration(entry.durationMs)}</span>
+          <span className="inline-flex items-center gap-1 tabular-nums">
+            <Clock3 className="h-3 w-3" />
+            {formatDuration(entry.durationMs)}
+          </span>
           <span>{new Date(entry.startedAt).toLocaleString()}</span>
+          <Chevron open={open} className="hidden h-3.5 w-3.5 sm:block" />
         </span>
       </button>
       {open && (
-        <div className="px-3 pb-3">
-          {entry.errorMessage && <div className="text-xs text-fail mb-2">{entry.errorMessage}</div>}
+        <div className="ws-rise pb-2 pl-5 pr-3">
+          {entry.errorMessage && <div className="mb-2 rounded-lg border border-fail/20 bg-fail/5 px-3 py-2 text-xs text-fail">{entry.errorMessage}</div>}
           {detail?.run.id === entry.testRunId && detail.cases.length > 0 && (
-            <div className="border border-border rounded-md overflow-hidden">
+            <div className="overflow-hidden rounded-lg border border-border bg-panel">
               {detail.cases.map((c) => (
                 <TestRunCaseRow key={c.id} testCase={c} />
               ))}
@@ -110,8 +124,9 @@ function RunAgainButton({ fileId, fileStatus }: { fileId: string; fileStatus: st
   });
   const committed = fileStatus === "committed";
   return (
-    <Button
-      variant="secondary"
+    <TextAction
+      icon={RotateCw}
+      spinning={run.isPending}
       onClick={(e) => {
         e.stopPropagation();
         run.mutate();
@@ -120,7 +135,7 @@ function RunAgainButton({ fileId, fileStatus }: { fileId: string; fileStatus: st
       title={!committed ? "The latest generated test for this case isn't committed to Git yet" : "Re-run this test case"}
     >
       {run.isPending ? "Running..." : "Run again"}
-    </Button>
+    </TextAction>
   );
 }
 
@@ -139,8 +154,8 @@ function TestCaseNode({ group, path }: { group: TestCaseGroup; path: string }) {
   const latest = group.executions[0];
 
   return (
-    <div className="border-t border-border first:border-t-0">
-      <div className="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-panel-2 transition-colors">
+    <div>
+      <div className={cx("flex flex-col gap-3 px-6 py-3.5 transition-colors hover:bg-panel-2/40 md:grid md:grid-cols-[minmax(0,1fr)_150px_130px] md:items-center md:gap-4", open && "bg-panel-2/30")}>
         {/* A <button> can't legally contain the <a> (Link) below - nested
             interactive elements produce inconsistent browser behavior - so
             this toggle is a div with a button role instead. */}
@@ -154,32 +169,36 @@ function TestCaseNode({ group, path }: { group: TestCaseGroup; path: string }) {
               toggle(key);
             }
           }}
-          className="flex items-center gap-2 min-w-0 text-left flex-1 cursor-pointer"
+          className="flex min-w-0 cursor-pointer items-center gap-3 text-left focus-visible:outline-none"
         >
-          <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
+          <Chevron open={open} />
           <div className="min-w-0">
             <Link
               to={`/requirements/${group.requirementId}`}
               onClick={(e) => e.stopPropagation()}
-              className="text-sm font-medium hover:text-accent truncate block"
+              className="block truncate font-medium text-text transition-colors hover:text-primary"
             >
               {group.testCaseName}
             </Link>
-            <div className="text-[11px] text-muted mono truncate">
+            <div className="mono mt-0.5 truncate text-xs text-muted">
               {group.requirementId} &middot; {group.executions.length} execution{group.executions.length === 1 ? "" : "s"}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <StatusBadge status={latest.status} />
+        <div className="pl-7 md:pl-0">
+          <StatusPill status={latest.status} />
+        </div>
+        <div className="pl-5 md:flex md:justify-end md:pl-0">
           <RunAgainButton fileId={group.latestFileId} fileStatus={group.latestFileStatus} />
         </div>
       </div>
       {open && (
-        <div className="pl-5">
-          {group.executions.map((e) => (
-            <ExecutionRow key={e.testRunId} entry={e} />
-          ))}
+        <div className="ws-rise bg-panel-2/30 pb-3 pl-[50px] pr-6">
+          <div className="border-l border-border">
+            {group.executions.map((e) => (
+              <ExecutionRow key={e.testRunId} entry={e} />
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -197,23 +216,26 @@ function DateNode({ group, path }: { group: DateGroup; path: string }) {
   const open = expanded.has(key);
   const total = group.testCases.length;
   const passed = group.testCases.filter((tc) => tc.executions[0].status === "passed").length;
+  const rate = total ? passed / total : 0;
 
   return (
-    <Card className="overflow-hidden">
-      <CollapsibleHeader open={open} onToggle={() => toggle(key)}>
-        <span className="text-sm font-medium flex-1">{formatDateLabel(group.dateKey)}</span>
-        <span className="text-xs text-muted mono">
+    <div className="border-t border-border first:border-t-0">
+      <button type="button" onClick={() => toggle(key)} className="flex w-full items-center gap-3 bg-panel-2/40 px-6 py-2.5 text-left transition-colors hover:bg-panel-2/70">
+        <Chevron open={open} className="h-3.5 w-3.5" />
+        <span className="mono flex-1 whitespace-nowrap text-[10.5px] font-medium uppercase tracking-[0.16em] text-muted">{formatDateLabel(group.dateKey)}</span>
+        <ProgressBar value={rate} tone={rate === 1 ? "pass" : rate >= 0.5 ? "warn" : "fail"} className="hidden w-24 sm:block" />
+        <span className="text-xs text-muted tabular-nums">
           {passed}/{total} test cases passing
         </span>
-      </CollapsibleHeader>
+      </button>
       {open && (
-        <div className="border-t border-border divide-y divide-border">
+        <div className="divide-y divide-border border-t border-border">
           {group.testCases.map((tc) => (
             <TestCaseNode key={tc.requirementId} group={tc} path={key} />
           ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -229,22 +251,23 @@ function WebsiteNode({ group }: { group: WebsiteGroup }) {
   const totalCases = group.dates.reduce((sum, d) => sum + d.testCases.length, 0);
 
   return (
-    <div>
-      <button onClick={() => toggle(key)} className="w-full flex items-center gap-2 mb-2">
-        <ChevronRight className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-90" : ""}`} />
-        <h2 className="text-sm font-semibold">{group.website}</h2>
-        <span className="text-xs text-muted">
-          ({group.dates.length} day{group.dates.length === 1 ? "" : "s"}, {totalCases} test case{totalCases === 1 ? "" : "s"})
+    <Surface className="overflow-hidden">
+      <button type="button" onClick={() => toggle(key)} className="group flex w-full items-center gap-3 px-6 py-4 text-left">
+        <Globe className="h-4 w-4 shrink-0 text-muted" />
+        <h2 className="truncate text-sm font-semibold text-text transition-colors group-hover:text-primary">{group.website}</h2>
+        <span className="hidden text-sm text-muted sm:inline">
+          {group.dates.length} day{group.dates.length === 1 ? "" : "s"} · {totalCases} test case{totalCases === 1 ? "" : "s"}
         </span>
+        <Chevron open={open} className="ml-auto" />
       </button>
       {open && (
-        <div className="space-y-3 pl-1">
+        <div className="border-t border-border">
           {group.dates.map((d) => (
             <DateNode key={d.dateKey} group={d} path={key} />
           ))}
         </div>
       )}
-    </div>
+    </Surface>
   );
 }
 
@@ -253,6 +276,7 @@ const STATUS_OPTIONS: { value: "all" | TestRunStatus; label: string }[] = [
   { value: "passed", label: "Passed" },
   { value: "failed", label: "Failed" },
   { value: "error", label: "Error" },
+  { value: "skipped", label: "Skipped" },
   { value: "running", label: "Running" },
 ];
 
@@ -330,88 +354,76 @@ export function TestHistory() {
   const hasFilters = !!search || website !== "all" || applicationId !== "all" || status !== "all" || !!date;
 
   return (
-    <div>
+    <PageShell>
       <PageHeader
+        trail={["Execution", "Test history"]}
+        live={data?.some((e) => e.status === "running") ? "Refreshing while runs are in progress" : undefined}
         title="Test History"
-        subtitle="Every test execution across every website/application - organized as Website > Date > Test Case > Execution"
-      />
-      <div className="p-4 space-y-4 sm:p-6 md:p-8">
-        <Card className="p-4">
-          <div className="flex flex-wrap gap-3">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by test case name or ID..."
-              className="flex-1 min-w-[200px] bg-panel-2 border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:border-accent"
-            />
-            <select
-              value={website}
-              onChange={(e) => setWebsite(e.target.value)}
-              className="bg-panel-2 border border-border rounded-md px-3 py-2 text-sm"
-            >
-              <option value="all">All websites</option>
-              {websites.map((w) => (
-                <option key={w} value={w}>
-                  {w}
-                </option>
-              ))}
-            </select>
-            <select
-              value={applicationId}
-              onChange={(e) => setApplicationId(e.target.value)}
-              className="bg-panel-2 border border-border rounded-md px-3 py-2 text-sm"
-            >
-              <option value="all">All applications</option>
-              {applications?.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as "all" | TestRunStatus)}
-              className="bg-panel-2 border border-border rounded-md px-3 py-2 text-sm"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-panel-2 border border-border rounded-md px-3 py-2 text-sm"
-            />
-            {hasFilters && (
-              <Button variant="ghost" onClick={clearFilters}>
-                Clear filters
-              </Button>
-            )}
-          </div>
-        </Card>
+        subtitle="Every test execution across every website/application - organized as Website > Date > Test Case > Execution" />
 
-        {isLoading && <div className="text-sm text-muted">Loading test history...</div>}
-        {isError && <div className="text-sm text-fail">Failed to load test history: {(error as Error).message}</div>}
+      <PageBody>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_170px_190px_150px_160px_auto]">
+          <TextInput
+            icon={Search}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by test case name or ID..."
+            className="sm:col-span-2 xl:col-span-1"
+          />
+          <SelectField value={website} onChange={(e) => setWebsite(e.target.value)}>
+            <option value="all">All websites</option>
+            {websites.map((w) => (
+              <option key={w} value={w}>
+                {w}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField value={applicationId} onChange={(e) => setApplicationId(e.target.value)}>
+            <option value="all">All applications</option>
+            {applications?.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField value={status} onChange={(e) => setStatus(e.target.value as "all" | TestRunStatus)}>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </SelectField>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+          {hasFilters && (
+            <TextAction icon={X} onClick={clearFilters} className="h-10 justify-center">
+              Clear
+            </TextAction>
+          )}
+        </div>
+
+        {isLoading && (
+          <Surface className="overflow-hidden">
+            <SkeletonRows rows={5} />
+          </Surface>
+        )}
+        {isError && <ErrorState>Failed to load test history: {(error as Error).message}</ErrorState>}
 
         {!isLoading && !isError && (data?.length ?? 0) === 0 && (
-          <div className="text-sm text-muted p-6 text-center">
-            No test executions yet - generate and run a test from a requirement, then it will show up here.
-          </div>
+          <Surface>
+            <EmptyState icon={History} title="No test executions yet" description="Generate and run a test from a requirement, then it will show up here." />
+          </Surface>
         )}
 
         {!isLoading && !isError && (data?.length ?? 0) > 0 && grouped.length === 0 && (
-          <div className="text-sm text-muted p-6 text-center">No executions match the current search/filters.</div>
+          <Surface>
+            <EmptyState icon={Search} title="Nothing matches" description="No executions match the current search/filters." />
+          </Surface>
         )}
 
-        <div className="space-y-6">
-          {grouped.map((g) => (
-            <WebsiteNode key={g.website} group={g} />
-          ))}
-        </div>
-      </div>
-    </div>
+        {grouped.map((g) => (
+          <WebsiteNode key={g.website} group={g} />
+        ))}
+      </PageBody>
+    </PageShell>
   );
 }

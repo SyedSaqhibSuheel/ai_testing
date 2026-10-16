@@ -199,7 +199,8 @@ export async function runPlaywrightTest(
 
     db.update(testRuns)
       .set({
-        status: failed > 0 ? "failed" : "passed",
+        // A run where every test was skipped verified nothing - don't call it "passed".
+        status: failed > 0 ? "failed" : passed > 0 ? "passed" : "skipped",
         finishedAt: new Date(),
         durationMs: Math.round(report.stats.duration),
         totalTests: specs.length,

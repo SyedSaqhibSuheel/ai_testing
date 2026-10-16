@@ -253,7 +253,8 @@ export const gitCommitFiles = sqliteTable("git_commit_files", {
 // .github/workflows/playwright.yml committed into the managed repo.
 // ---------------------------------------------------------------------------
 
-export type TestRunStatus = "running" | "passed" | "failed" | "error";
+// "skipped": every test in the run was skipped, so nothing was actually verified.
+export type TestRunStatus = "running" | "passed" | "failed" | "error" | "skipped";
 export type TestRunTrigger = "manual" | "auto_after_commit";
 
 export const testRuns = sqliteTable("test_runs", {

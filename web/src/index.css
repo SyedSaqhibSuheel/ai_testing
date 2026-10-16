@@ -47,6 +47,7 @@
   --color-pass: hsl(var(--pass));
   --color-fail: hsl(var(--fail));
   --color-warn: hsl(var(--warn));
+  --color-info: hsl(var(--info));
 }
 
 :root {
@@ -80,6 +81,7 @@
   --pass: 142 71% 42%;
   --fail: 0 72% 55%;
   --warn: 38 92% 50%;
+  --info: 217 91% 52%;
 }
 
 .dark {
@@ -113,6 +115,7 @@
   --pass: 142 71% 50%;
   --fail: 0 72% 60%;
   --warn: 38 92% 55%;
+  --info: 213 94% 64%;
 }
 
 * {
@@ -211,10 +214,143 @@ a {
   }
 }
 
+/* Workspace pages (components/workspace/kit.tsx) */
+
+/* Premium dark palette, scoped to the workspace pages + sidebar. Tailwind's
+   --color-* vars are resolved on :root, so they're overridden here directly
+   rather than via the base --card/--border tokens. */
+.dark .ws-theme {
+  color-scheme: dark;
+
+  --ws-bg: 228 28% 7%; /* #0D0F17 */
+  --ws-panel: 221 39% 11%; /* #111827 */
+  --ws-panel-2: 222 28% 15%;
+  --ws-text: 220 20% 97%;
+  --ws-muted: 218 11% 65%;
+  --ws-primary: 258 90% 70%;
+  --ws-pass: 152 62% 55%;
+  --ws-fail: 0 86% 69%;
+  --ws-warn: 38 95% 62%;
+  --ws-info: 213 94% 68%;
+
+  --color-background: hsl(var(--ws-bg));
+  --color-bg: hsl(var(--ws-bg));
+  --color-card: hsl(var(--ws-panel));
+  --color-panel: hsl(var(--ws-panel));
+  --color-secondary: hsl(var(--ws-panel-2));
+  --color-panel-2: hsl(var(--ws-panel-2));
+  --color-foreground: hsl(var(--ws-text));
+  --color-text: hsl(var(--ws-text));
+  --color-muted: hsl(var(--ws-muted));
+  --color-muted-foreground: hsl(var(--ws-muted));
+  --color-muted-2: hsl(var(--ws-muted));
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-input: rgb(255 255 255 / 0.1);
+  --color-border-hover: rgb(255 255 255 / 0.16);
+  --color-primary: hsl(var(--ws-primary));
+  --color-ring: hsl(var(--ws-primary));
+  --color-pass: hsl(var(--ws-pass));
+  --color-fail: hsl(var(--ws-fail));
+  --color-warn: hsl(var(--ws-warn));
+  --color-info: hsl(var(--ws-info));
+}
+
+/* Soft brand glows, pinned to the viewport so they don't scroll away. */
+.ws-page.ws-theme {
+  --ws-grid: rgb(30 27 75 / 0.05);
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(900px 480px at 92% -10%, hsl(262 83% 58% / 0.07), transparent 60%),
+    radial-gradient(760px 520px at 100% 105%, hsl(326 78% 58% / 0.06), transparent 60%),
+    hsl(var(--background));
+  background-attachment: fixed;
+}
+
+.dark .ws-page.ws-theme {
+  --ws-grid: rgb(255 255 255 / 0.035);
+  background:
+    radial-gradient(900px 480px at 92% -10%, hsl(258 90% 66% / 0.09), transparent 60%),
+    radial-gradient(760px 520px at 100% 105%, hsl(326 78% 60% / 0.06), transparent 60%),
+    hsl(var(--ws-bg));
+  background-attachment: fixed;
+}
+
+/* Faint blueprint grid behind the page header, fading out downwards. */
+.ws-page.ws-theme::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 520px;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--ws-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ws-grid) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 0%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 0%, #000 35%, transparent 100%);
+}
+
+.ws-theme {
+  font-feature-settings: "cv11", "ss01", "ss03";
+  text-rendering: optimizeLegibility;
+}
+
+.ws-theme .mono {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-feature-settings: "zero" 0;
+}
+
+.ws-indeterminate {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  overflow: hidden;
+}
+
+.ws-indeterminate::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
+  animation: wsSlide 1.4s ease-in-out infinite;
+}
+
+@keyframes wsSlide {
+  from {
+    left: -35%;
+  }
+
+  to {
+    left: 100%;
+  }
+}
+
+.ws-rise {
+  animation: wsRise 0.25s ease-out both;
+}
+
+@keyframes wsRise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dashboard-orb,
   .animate-pulse,
-  .animate-ping {
+  .animate-ping,
+  .ws-indeterminate::after,
+  .ws-rise {
     animation: none !important;
   }
 }
