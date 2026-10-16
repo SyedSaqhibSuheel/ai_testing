@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import {
@@ -166,7 +166,7 @@ export function runTestRouter(db: Db, config: Config, urlConfigService?: URLConf
         ? db.select().from(applications).where(eq(applications.id, req.body.applicationId)).get()
         : getActiveApplication(db);
     const appRequirementIds = application
-      ? new Set(db.select({ id: requirements.id }).from(requirements).where(eq(requirements.applicationId, application.id)).all().map((r) => r.id))
+      ? new Set(db.select({ id: requirements.id }).from(requirements).where(and(eq(requirements.applicationId, application.id), eq(requirements.isDeleted, false))).all().map((r) => r.id))
       : null;
     const files = db
       .select()

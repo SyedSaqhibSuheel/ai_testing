@@ -1,4 +1,4 @@
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "./client.js";
 import { agentRuns, requirements, scenarios, testRuns } from "./schema.js";
 
@@ -16,6 +16,9 @@ export function recoverInterruptedWork(db: Db): void {
   const runs = db.update(testRuns).set({ status: "error", errorMessage: INTERRUPTED, finishedAt: now }).where(eq(testRuns.status, "running")).returning({ id: testRuns.id }).all();
   const agents = db.update(agentRuns).set({ status: "failed", errorMessage: INTERRUPTED, finishedAt: now }).where(eq(agentRuns.status, "running")).returning({ id: agentRuns.id }).all();
   db.update(scenarios).set({ status: "approved", updatedAt: now }).where(eq(scenarios.status, "grounding_in_progress")).run();
+  // An interrupted first analysis failed; an interrupted RE-analysis of a screen that
+  // already had one keeps that earlier analysis, so it goes back to review.
+  db.update(requirements).set({ status: "awaiting_scenario_approval", updatedAt: now }).where(and(eq(requirements.status, "analyzing"), isNotNull(requirements.currentAnalysisId))).run();
   db.update(requirements).set({ status: "failed", updatedAt: now }).where(eq(requirements.status, "analyzing")).run();
   db.update(requirements).set({ status: "awaiting_scenario_approval", updatedAt: now }).where(eq(requirements.status, "planning")).run();
   db.update(requirements).set({ status: "awaiting_plan_approval", updatedAt: now }).where(eq(requirements.status, "generating_tests")).run();
