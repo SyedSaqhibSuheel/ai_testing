@@ -1,4 +1,4 @@
-import { eq, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "./client.js";
 import { agentRuns, requirements, scenarios, testRuns } from "./schema.js";
 
@@ -28,5 +28,11 @@ export function recoverInterruptedWork(db: Db): void {
   db.update(scenarios)
     .set({ applicationId: sql`(select ${requirements.applicationId} from ${requirements} where ${requirements.id} = ${scenarios.requirementId})` })
     .where(isNull(scenarios.applicationId))
+    .run();
+
+  // Runs where every test was skipped used to be recorded as "passed".
+  db.update(testRuns)
+    .set({ status: "skipped" })
+    .where(and(eq(testRuns.status, "passed"), eq(testRuns.passedCount, 0), gt(testRuns.skippedCount, 0)))
     .run();
 }

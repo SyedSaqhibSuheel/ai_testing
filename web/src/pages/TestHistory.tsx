@@ -276,6 +276,7 @@ const STATUS_OPTIONS: { value: "all" | TestRunStatus; label: string }[] = [
   { value: "passed", label: "Passed" },
   { value: "failed", label: "Failed" },
   { value: "error", label: "Error" },
+  { value: "skipped", label: "Skipped" },
   { value: "running", label: "Running" },
 ];
 
