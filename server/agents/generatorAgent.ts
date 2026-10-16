@@ -16,6 +16,7 @@ import { getPlatformSettings } from "../settings/settingsService.js";
 import { shouldAutoApprove } from "../approval/gate.js";
 import { approveTestFile } from "../testFiles/testFileTransitions.js";
 import { commitApprovedTestFiles } from "../git/managedRepo.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -124,25 +125,33 @@ export async function runGeneratorAgent(db: Db, config: Config, requirementId: s
           }
         : undefined;
 
-    // Prefer the caller's active URL-config profile (Settings > Environment
-    // configuration) over the legacy single testAppUrl setting, then .env.
-    const settings = getPlatformSettings(db, config);
-    const testAppUrl = activeAppBaseUrl || settings.testAppUrl || config.appBaseUrl;
+    // The caller's resolved URL, else the same resolution every other stage uses.
+    const testAppUrl = activeAppBaseUrl || resolveTargetAppUrl(db, config);
 
     const provider = getProvider(config);
-    const chatResult = await provider.chat(
-      [
-        { role: "system", text: buildGeneratorSystemPrompt() },
-        {
-          role: "user",
-          text: buildGeneratorUserPrompt(requirement.title, planScenarios, [...confirmedTestIds], [...confirmedRoutes], login, testAppUrl, testIdComponents),
-        },
-      ],
-      []
-    );
-    const parsed = GeneratedTestFileSchema.safeParse(extractJson(chatResult.text ?? ""));
-    if (!parsed.success) {
-      throw new Error(`Generator output failed schema validation: ${JSON.stringify(parsed.error.issues)}`);
+    const userPrompt = buildGeneratorUserPrompt(requirement.title, planScenarios, [...confirmedTestIds], [...confirmedRoutes], login, testAppUrl, testIdComponents);
+    // Same one-retry-with-the-error pattern the Intelligence/Code Analysis
+    // agents use: a model returning malformed JSON (unescaped quotes in the
+    // embedded test code are common) would otherwise fail the whole run.
+    const attempt = async (extra?: string) => {
+      const chatResult = await provider.chat(
+        [
+          { role: "system", text: buildGeneratorSystemPrompt() },
+          { role: "user", text: extra ? `${userPrompt}\n\n${extra}` : userPrompt },
+        ],
+        []
+      );
+      const parsed = GeneratedTestFileSchema.safeParse(extractJson(chatResult.text ?? ""));
+      if (!parsed.success) {
+        throw new Error(`Generator output failed schema validation: ${JSON.stringify(parsed.error.issues)}`);
+      }
+      return parsed;
+    };
+    let parsed: Awaited<ReturnType<typeof attempt>>;
+    try {
+      parsed = await attempt();
+    } catch (firstError) {
+      parsed = await attempt(`Your previous response was invalid: ${(firstError as Error).message}. Return ONLY the corrected JSON object, with the test code as a properly escaped JSON string.`);
     }
 
     updateAgentRunTask(db, runId, "Validating generated code");

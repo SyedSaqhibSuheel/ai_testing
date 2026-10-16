@@ -6,6 +6,7 @@ import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
 import { testFiles, testRuns, testRunCases } from "../db/schema.js";
 import { classifyTestFailure } from "../analysis/classifyTestFailure.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 // Real, deterministic Playwright execution - no LLM involved. This is the
 // "CI/CD runs the code, report appears in the dashboard" half of the flow;
@@ -78,7 +79,7 @@ export async function runPlaywrightTest(
   // Resolved once up front (rather than inside the spawn Promise below) so it
   // can be persisted on the run row itself - this is what lets test history
   // be grouped/filtered by website even after settings.testAppUrl changes later.
-  const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
+  const targetAppUrl = appBaseUrl || resolveTargetAppUrl(db, config);
 
   const runRow = db
     .insert(testRuns)

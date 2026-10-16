@@ -1,7 +1,8 @@
 import express from "express";
 import { loadConfig } from "../src/config.js";
 import { createDb } from "./db/client.js";
-import { backfillScenarioApplicationIds, seedDefaultApplicationIfNone } from "./config/activeApplication.js";
+import { seedDefaultApplicationIfNone, warnMissingSourceDirs } from "./config/activeApplication.js";
+import { recoverInterruptedWork } from "./db/recovery.js";
 import { requirementsRouter } from "./routes/requirements.js";
 import { applicationsRouter } from "./routes/applications.js";
 import { scenariosRouter } from "./routes/scenarios.js";
@@ -22,7 +23,8 @@ import { attachSseHub } from "./sse/hub.js";
 const config = loadConfig();
 const db = createDb(config.dbPath);
 seedDefaultApplicationIfNone(db, config);
-backfillScenarioApplicationIds(db);
+recoverInterruptedWork(db);
+warnMissingSourceDirs(db, config);
 const urlConfigService = new URLConfigService(db, {
   defaultAppBaseUrl: config.appBaseUrl,
   defaultApiBaseUrl: config.apiBaseUrl,

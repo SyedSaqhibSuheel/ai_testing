@@ -34,6 +34,8 @@ export interface ApplicationInput {
 export interface ActiveApplication {
   application: Application | null;
   hasSourceAccess: boolean;
+  /** Configured source directories that don't exist on disk. */
+  missingSourceDirs?: Array<{ field: string; path: string }>;
 }
 
 
@@ -88,7 +90,7 @@ export interface CodeFeatureSummary {
   requirementStatus: RequirementStatus | null;
 }
 
-export type PipelineStage = "approving" | "planning" | "generating" | "committing" | "running" | "done" | "failed";
+export type PipelineStage = "approving" | "planning" | "generating" | "committing" | "running" | "done" | "waiting" | "failed";
 
 /** One-click approve → plan → generate → commit → run chain for a requirement (server/agents/requirementPipeline.ts). */
 export interface PipelineState {
@@ -98,6 +100,25 @@ export interface PipelineState {
   error?: string;
   testFileId?: string;
   testRunId?: string;
+  startedAt: string;
+  finishedAt?: string;
+}
+
+/** Full auto run for the whole active application (server/agents/autoPipeline.ts). */
+export interface AutoRunState {
+  applicationId?: string;
+  stage: "analyzing" | "testing" | "done" | "failed";
+  message: string;
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  /** Requirements stopped at a gate the approval mode leaves to a human. */
+  waiting: number;
+  mode: string;
+  currentRequirementId?: string;
+  failures: Array<{ requirementId: string; title: string; error: string }>;
+  error?: string;
   startedAt: string;
   finishedAt?: string;
 }

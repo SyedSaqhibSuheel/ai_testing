@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
-import { eq, isNull, sql } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import type { Config } from "../../src/config.js";
-import { applications, requirements, scenarios } from "../db/schema.js";
+import { applications, requirements } from "../db/schema.js";
 import { getSetting, setSetting } from "../settings/settingsService.js";
 
 const ACTIVE_APPLICATION_SETTING_KEY = "activeApplicationId";
@@ -79,6 +79,20 @@ export function hasSourceAccess(config: Config): boolean {
   return existsSync(config.backendSrcDir) || existsSync(config.frontendSrcDir);
 }
 
+/** Source directories the active app has configured that don't exist on disk (so scanning them silently finds nothing). */
+export function missingSourceDirs(config: Config): Array<{ field: "backendSrcDir" | "frontendSrcDir" | "frontendServerSrcDir"; path: string }> {
+  return (["backendSrcDir", "frontendSrcDir", "frontendServerSrcDir"] as const)
+    .filter((field) => !!config[field] && !existsSync(config[field]))
+    .map((field) => ({ field, path: config[field] }));
+}
+
+export function warnMissingSourceDirs(db: Db, baseConfig: Config): void {
+  const config = resolveAppConfig(db, baseConfig);
+  for (const { field, path } of missingSourceDirs(config)) {
+    console.warn(`Active application "${config.applicationName ?? "(none)"}": ${field} does not exist (${path}) - code scans will skip it. Fix it on the Applications page.`);
+  }
+}
+
 /**
  * Seeds the very first Application from today's .env values, so upgrading
  * onto multi-app support doesn't lose or reset the app this platform was
@@ -112,19 +126,4 @@ export function seedDefaultApplicationIfNone(db: Db, config: Config): void {
   // app this platform was already pointed at - attribute it, so nothing
   // this user already built looks orphaned once application scoping shows up.
   db.update(requirements).set({ applicationId: row.id }).where(isNull(requirements.applicationId)).run();
-}
-
-/**
- * Scenarios used to be inserted without an application_id, so filtering them
- * by application (Test Case Management, per-app execution history) found
- * nothing. A scenario belongs to its requirement's application - inherit it
- * for any row still missing one. Idempotent, safe on every startup.
- */
-export function backfillScenarioApplicationIds(db: Db): void {
-  db.update(scenarios)
-    .set({
-      applicationId: sql`(SELECT ${requirements.applicationId} FROM ${requirements} WHERE ${requirements.id} = ${scenarios.requirementId})`,
-    })
-    .where(isNull(scenarios.applicationId))
-    .run();
 }

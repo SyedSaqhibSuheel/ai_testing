@@ -13,13 +13,10 @@ export function insertScenarioFromDraft(
   requirementId: string,
   analysisId: string | null
 ): string {
-  // A scenario belongs to its requirement's application - without this the
-  // per-application Test Case Management view can never find it.
-  const requirement = db
-    .select({ applicationId: requirements.applicationId })
-    .from(requirements)
-    .where(eq(requirements.id, requirementId))
-    .get();
+  // Test Case Management lists an application's test cases (and their runs)
+  // by scenarios.applicationId - inherit it from the requirement, or the
+  // AI-generated cases never show up there.
+  const requirement = db.select({ applicationId: requirements.applicationId }).from(requirements).where(eq(requirements.id, requirementId)).get();
   const row = db
     .insert(scenarios)
     .values({

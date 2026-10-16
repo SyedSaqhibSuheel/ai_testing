@@ -10,12 +10,24 @@ import { PageHeader } from "@/components/PageHeader";
 export function Requirements() {
   const queryClient = useQueryClient();
   const [rawText, setRawText] = useState("");
-  const { data: requirements } = useQuery({ queryKey: ["requirements"], queryFn: api.listRequirements });
+  const [submitted, setSubmitted] = useState<{ id: string; title: string } | null>(null);
+  const { data: settings } = useQuery({ queryKey: ["settings"], queryFn: api.getSettings });
+  const fullyAutomatic = settings?.approvalMode === "fully_automatic";
+  // Submitting starts the analysis server-side (and, in Fully Automatic mode,
+  // the whole plan → generate → commit → run chain), so keep the list live
+  // while anything is still being worked on.
+  const { data: requirements } = useQuery({
+    queryKey: ["requirements"],
+    queryFn: api.listRequirements,
+    refetchInterval: (query) =>
+      query.state.data?.some((r) => ["submitted", "analyzing", "planning", "generating_tests"].includes(r.status)) ? 3000 : false,
+  });
 
   const createMutation = useMutation({
     mutationFn: () => api.createRequirement(rawText),
-    onSuccess: () => {
+    onSuccess: (row) => {
       setRawText("");
+      setSubmitted({ id: row.id, title: row.title });
       queryClient.invalidateQueries({ queryKey: ["requirements"] });
     },
   });
@@ -33,6 +45,14 @@ export function Requirements() {
             className="w-full min-h-24 bg-panel-2 border border-border rounded-md px-3 py-2.5 text-sm resize-y focus:outline-none focus:border-accent"
           />
           {createMutation.isError && <p className="text-xs text-fail mt-2">{(createMutation.error as Error).message}</p>}
+          {submitted && (
+            <p className="text-xs text-muted mt-2">
+              <Link to={`/requirements/${submitted.id}`} className="text-accent hover:underline">{submitted.title}</Link>{" "}
+              {fullyAutomatic
+                ? "is being turned into test cases, then planned, generated, committed and run automatically (Fully Automatic mode)."
+                : "is being turned into test cases. Review and approve them on its page."}
+            </p>
+          )}
           <div className="flex justify-end mt-3">
             <Button onClick={() => createMutation.mutate()} disabled={!rawText.trim() || createMutation.isPending}>
               {createMutation.isPending ? "Submitting..." : "Submit requirement"}

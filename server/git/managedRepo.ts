@@ -92,27 +92,15 @@ export async function commitApprovedTestFiles(
   // Step 3: Check git status before committing
   const status = await git.status();
   if (status.isClean()) {
-    // Working tree is clean - files are already committed
-    // Return success instead of error, but mark as "already committed"
+    // The exact same code is already in HEAD (e.g. a regenerated version
+    // identical to the last commit) - nothing new to commit, but gate G4
+    // still happened, so it's recorded exactly like a real commit against
+    // the commit that already holds this content.
     console.log("Git working tree is clean - no new changes to commit");
-
-    // Since files are already committed, just update their status in DB
-    for (const file of files) {
-      const currentStatus = db.select().from(testFiles).where(eq(testFiles.id, file.id)).get()?.status;
-      if (currentStatus !== "committed") {
-        db.update(testFiles).set({ status: "committed" }).where(eq(testFiles.id, file.id)).run();
-      }
-    }
-
-    // Get the latest commit SHA
     const log = await git.log({ maxCount: 1 });
     const latestCommitSha = log.latest?.hash || "HEAD";
-
-    return {
-      commitSha: latestCommitSha,
-      filesChanged: relativePaths,
-      status: "already_committed",
-    };
+    recordCommit(db, config, files, latestCommitSha, (await git.branch()).current, message, author);
+    return { commitSha: latestCommitSha, filesChanged: relativePaths, status: "already_committed" };
   }
 
   // Step 4: Commit (only if there are actual changes)
@@ -124,12 +112,33 @@ export async function commitApprovedTestFiles(
   const branchSummary = await git.branch();
 
   // Step 5: Record commit in database
+  recordCommit(db, config, files, commitSha, branchSummary.current, message, author);
+  return { commitSha, filesChanged: relativePaths };
+}
+
+/**
+ * The one place a commit becomes durable platform state: the git_commits
+ * row + per-file links, test_files → committed, the G4 audit entry, and the
+ * requirement → committed. Both the real-commit and the already-committed
+ * path go through here so neither can skip the record or the audit log.
+ */
+function recordCommit(
+  db: Db,
+  config: Config,
+  files: Array<typeof testFiles.$inferSelect>,
+  commitSha: string,
+  branch: string | undefined,
+  message: string,
+  author: string
+): void {
   const commitRow = db
     .insert(gitCommits)
-    .values({ commitSha, branch: branchSummary.current ?? config.managedRepoBranch, message, author })
+    .values({ commitSha, branch: branch || config.managedRepoBranch, message, author })
     .returning({ id: gitCommits.id })
     .get();
 
+  // "system" is the auto-approval actor (fully automatic mode / G4 auto-pass).
+  const actorType = author === "system" ? "system_auto" : "human";
   for (const file of files) {
     db.insert(gitCommitFiles).values({ commitId: commitRow.id, testFileId: file.id, filePathAtCommit: file.filePath }).run();
     db.update(testFiles).set({ status: "committed" }).where(eq(testFiles.id, file.id)).run();
@@ -137,8 +146,8 @@ export async function commitApprovedTestFiles(
       .values({
         entityType: "git_commit",
         entityId: commitRow.id,
-        action: "approved",
-        actorType: "human",
+        action: actorType === "human" ? "approved" : "auto_approved",
+        actorType,
         actor: author,
         previousStatus: "approved",
         newStatus: "committed",
@@ -150,6 +159,4 @@ export async function commitApprovedTestFiles(
   for (const reqId of requirementIds) {
     db.update(requirements).set({ status: "committed", updatedAt: new Date() }).where(eq(requirements.id, reqId)).run();
   }
-
-  return { commitSha, filesChanged: relativePaths };
 }

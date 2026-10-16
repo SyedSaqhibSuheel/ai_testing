@@ -17,6 +17,7 @@ import { getPlatformSettings } from "../settings/settingsService.js";
 import { shouldAutoApprove } from "../approval/gate.js";
 import { approveScenario } from "../scenarios/scenarioTransitions.js";
 import { isConfirmedTestId } from "./validateTestSyntax.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -72,7 +73,7 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
     db.update(scenarios).set({ status: "grounding_in_progress", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
   }
 
-  const targetAppUrl = appBaseUrl ?? config.appBaseUrl;
+  const targetAppUrl = appBaseUrl || resolveTargetAppUrl(db, config);
   const hasSource = hasSourceAccess(config);
   const context = hasSource ? buildContext(config.backendSrcDir, config.frontendSrcDir, config.frontendServerSrcDir, config.cacheDir) : null;
   const relevant = context ? selectRelevantContext(requirement.rawText, context) : EMPTY_CONTEXT;
@@ -93,9 +94,13 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
       : undefined;
 
   let explorationId: string | undefined;
-  const mcpSession = await startPlaywrightMcp(config.rootDir, config.mcpHeadless);
+  // Started inside the try: if the browser can't launch, the catch below must
+  // still fail the run and release the scenarios, or they sit in
+  // grounding_in_progress (and the run in "running") forever.
+  let mcpSession: Awaited<ReturnType<typeof startPlaywrightMcp>> | undefined;
 
   try {
+    mcpSession = await startPlaywrightMcp(config.rootDir, config.mcpHeadless);
     updateAgentRunTask(db, runId, "Exploring application");
     const explored = await exploreApp(
       provider,
@@ -152,10 +157,21 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
       login
     );
 
-    const chatResult = await provider.chat([{ role: "system", text: groundSystem }, { role: "user", text: groundUser }], []);
-    const parsed = GroundedPlansSchema.safeParse(extractJson(chatResult.text ?? ""));
-    if (!parsed.success) {
-      throw new Error(`Grounding output failed schema validation: ${JSON.stringify(parsed.error.issues)}`);
+    // One retry with the error, as in the Intelligence agent - malformed JSON
+    // shouldn't throw away a whole (slow) live exploration.
+    const ground = async (extra?: string) => {
+      const chatResult = await provider.chat([{ role: "system", text: groundSystem }, { role: "user", text: extra ? `${groundUser}\n\n${extra}` : groundUser }], []);
+      const result = GroundedPlansSchema.safeParse(extractJson(chatResult.text ?? ""));
+      if (!result.success) {
+        throw new Error(`Grounding output failed schema validation: ${JSON.stringify(result.error.issues)}`);
+      }
+      return result;
+    };
+    let parsed: Awaited<ReturnType<typeof ground>>;
+    try {
+      parsed = await ground();
+    } catch (firstError) {
+      parsed = await ground(`Your previous response was invalid: ${(firstError as Error).message}. Return ONLY the corrected JSON object.`);
     }
 
     const { approvalMode } = getPlatformSettings(db, config);
@@ -190,28 +206,19 @@ export async function runPlannerAgent(db: Db, config: Config, requirementId: str
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
-    // Handle missing Playwright browsers gracefully - user can still run tests without planner
-    if (message.includes("chrome-for-testing") || message.includes("Playwright")) {
-      console.warn("⚠️  Playwright browser not available for planning - skipping exploration");
-      console.warn("   Tests can still be run and committed. This is a non-critical feature.");
-
-      // Mark scenarios as approved without planning (they can still be committed and run)
-      for (const s of approvedScenarios) {
-        db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
-      }
-      db.update(requirements).set({ status: "awaiting_scenario_approval", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
-      completeAgentRun(db, runId, { explorationRunId: explorationId, groundedCount: 0 });
-      return;
-    }
-
-    failAgentRun(db, runId, message);
+    // A missing browser used to be swallowed here as a "completed" run with
+    // nothing grounded, which left auto mode with no plan, no error and no
+    // way to tell why. Fail visibly instead; scenarios go back to `approved`
+    // below so the Planner can simply be re-run once the browser is there.
+    const browserMissing = message.includes("chrome-for-testing") || /executable doesn't exist|chrome.*not found|browser.*not (found|installed)/i.test(message);
+    failAgentRun(db, runId, browserMissing ? `The Planner could not start a browser (system Google Chrome is required): ${message}` : message);
     db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirementId)).run();
     for (const s of approvedScenarios) {
       db.update(scenarios).set({ status: "approved", updatedAt: new Date() }).where(eq(scenarios.id, s.id)).run();
     }
     throw err;
   } finally {
-    await mcpSession.close();
+    await mcpSession?.close();
   }
 }
 

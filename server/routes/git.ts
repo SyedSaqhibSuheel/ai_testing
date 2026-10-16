@@ -5,7 +5,7 @@ import type { Config } from "../../src/config.js";
 import { gitCommits, testFiles } from "../db/schema.js";
 import { getRepoStatus, getCommitHistory, commitApprovedTestFiles } from "../git/managedRepo.js";
 import { runPlaywrightTest } from "../execution/runTests.js";
-import { getPlatformSettings } from "../settings/settingsService.js";
+import { resolveTargetAppUrl } from "../config/targetAppUrl.js";
 
 export function gitRouter(db: Db, config: Config): Router {
   const router = Router();
@@ -71,22 +71,26 @@ export function gitRouter(db: Db, config: Config): Router {
       // "Commit to Git -> CI/CD runs the code -> report appears in the
       // dashboard": fire-and-forget so the commit response isn't held up by
       // a real browser test run. The client polls GET /api/test-runs.
-      // Same DB-persisted testAppUrl the Generator/Planner use, rather than
-      // silently falling all the way back to config.appBaseUrl (.env,
-      // typically the platform's own localhost address).
-      const { testAppUrl } = getPlatformSettings(db, config);
+      // Same app URL the Planner/Generator use (the active Application first).
+      const testAppUrl = resolveTargetAppUrl(db, config);
       const autoRunRows = db
         .select({ id: testFiles.id, autoRunOnCommit: testFiles.autoRunOnCommit })
         .from(testFiles)
         .where(inArray(testFiles.id, testFileIds))
         .all();
       const autoRunIds = new Set(autoRunRows.filter((r) => r.autoRunOnCommit).map((r) => r.id));
-      for (const id of testFileIds) {
-        if (!autoRunIds.has(id)) continue;
-        runPlaywrightTest(db, config, id, "auto_after_commit", testAppUrl).catch((err) => {
-          console.error(`Auto test run failed for test file ${id}:`, err);
-        });
-      }
+      // Sequential, not concurrent - committing several files at once and
+      // running them all against the same app/session/seed data at the same
+      // time causes exactly the kind of cross-test interference "Save & Run
+      // All" had (see server/routes/testRuns.ts's /run-all).
+      (async () => {
+        for (const id of testFileIds) {
+          if (!autoRunIds.has(id)) continue;
+          await runPlaywrightTest(db, config, id, "auto_after_commit", testAppUrl).catch((err) => {
+            console.error(`Auto test run failed for test file ${id}:`, err);
+          });
+        }
+      })();
 
       return res.status(statusCode).json(responseBody);
     } catch (err) {
