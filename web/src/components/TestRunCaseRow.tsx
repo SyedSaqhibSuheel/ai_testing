@@ -78,11 +78,6 @@ export function TestRunCaseRow({ testCase }: { testCase: TestRunCase }) {
               </a>
             )}
           </div>
-          {testCase.screenshotPath && (
-            <a href={`/artifacts/${testCase.screenshotPath}`} target="_blank" rel="noreferrer">
-              <img src={`/artifacts/${testCase.screenshotPath}`} alt="Failure screenshot" className="max-w-sm rounded border border-border" />
-            </a>
-          )}
         </div>
       )}
     </div>

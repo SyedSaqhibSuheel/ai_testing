@@ -290,7 +290,7 @@ export interface GitCommitRecord {
   committedAt: string;
 }
 
-export type TestRunStatus = "running" | "passed" | "failed" | "error";
+export type TestRunStatus = "running" | "passed" | "failed" | "error" | "skipped";
 export type TestRunTrigger = "manual" | "auto_after_commit";
 
 export interface TestRun {
