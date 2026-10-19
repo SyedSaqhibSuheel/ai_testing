@@ -12,6 +12,7 @@ import { IntelligenceAnalysisSchema, type IntelligenceAnalysis } from "../schema
 import { buildCodeAnalysisSystemPrompt, buildCodeAnalysisUserPrompt, buildAutoRequirementText } from "./codeAnalysisPrompts.js";
 import { startAgentRun, updateAgentRunTask, completeAgentRun, failAgentRun } from "./agentRunTracking.js";
 import { persistIntelligenceAnalysis } from "./persistIntelligenceAnalysis.js";
+import { beginCodeAnalysisRequirement, retireScenarios } from "./codeAnalysisRequirement.js";
 import { resolveAppConfig } from "../config/activeApplication.js";
 
 export interface FrontendModule {
@@ -187,19 +188,12 @@ async function callCodeAnalysisLlm(config: Config, module: FrontendModule, sourc
 }
 
 async function analyzeModule(db: Db, config: Config, module: FrontendModule): Promise<void> {
-  const requirement = db
-    .insert(requirements)
-    .values({
-      title: `Code Analysis: ${module.componentName}`,
-      rawText: buildAutoRequirementText(module, config.applicationName),
-      submittedBy: "code-analysis-agent",
-      source: "code_analysis",
-      sourceModule: module.componentName,
-      status: "analyzing",
-      applicationId: config.applicationId,
-    })
-    .returning()
-    .get();
+  const { requirement, statusOnFailure } = beginCodeAnalysisRequirement(db, {
+    applicationId: config.applicationId,
+    sourceModule: module.componentName,
+    title: `Code Analysis: ${module.componentName}`,
+    rawText: buildAutoRequirementText(module, config.applicationName),
+  });
 
   const runId = startAgentRun(db, {
     agentType: "code_analysis",
@@ -222,11 +216,12 @@ async function analyzeModule(db: Db, config: Config, module: FrontendModule): Pr
     const analysis = await callCodeAnalysisLlm(config, module, source, backendContext);
 
     const { analysisId, scenarioCount } = persistIntelligenceAnalysis(db, config, requirement.id, runId, analysis);
+    retireScenarios(db, requirement.id, analysisId);
     completeAgentRun(db, runId, { analysisId, scenarioCount });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     failAgentRun(db, runId, message);
-    db.update(requirements).set({ status: "failed", updatedAt: new Date() }).where(eq(requirements.id, requirement.id)).run();
+    db.update(requirements).set({ status: statusOnFailure, updatedAt: new Date() }).where(eq(requirements.id, requirement.id)).run();
     throw err;
   }
 }

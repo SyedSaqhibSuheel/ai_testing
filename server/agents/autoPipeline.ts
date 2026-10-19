@@ -8,7 +8,7 @@ import { runIntelligenceAgent } from "./intelligenceAgent.js";
 import { isCodeAnalysisBatchRunning, runCodeAnalysisBatch } from "./codeAnalysisAgent.js";
 import { isCodeFeatureBatchRunning, runCodeFeatureBatch } from "./codeFeatureAnalysis.js";
 import { getPlatformSettings } from "../settings/settingsService.js";
-import { isFullyAutomatic, isPipelineRunning, runRequirementPipeline } from "./requirementPipeline.js";
+import { getPipelineState, isFullyAutomatic, isPipelineRunning, runRequirementPipeline, type PipelineState } from "./requirementPipeline.js";
 
 /**
  * Each agent already auto-approves its own gate when the approval mode says
@@ -47,6 +47,12 @@ export interface AutoRunState {
   waiting: number;
   mode: string;
   currentRequirementId?: string;
+  /** The in-flight pipeline of currentRequirementId (stage + what it's doing), added when read. */
+  current?: PipelineState | null;
+  /** Requirements the testing phase will work through, in order. */
+  queue: string[];
+  /** What happened to each requirement already worked through. */
+  results: Record<string, "done" | "waiting" | "failed">;
   failures: Array<{ requirementId: string; title: string; error: string }>;
   error?: string;
   startedAt: string;
@@ -58,7 +64,8 @@ export interface AutoRunState {
 let autoRun: AutoRunState | null = null;
 
 export function getAutoRunState(): AutoRunState | null {
-  return autoRun;
+  if (!autoRun) return null;
+  return { ...autoRun, current: autoRun.currentRequirementId ? getPipelineState(autoRun.currentRequirementId) : null };
 }
 
 export function isAutoRunRunning(): boolean {
@@ -98,6 +105,8 @@ export function startAutoRun(db: Db, config: Config, opts: AutoRunOptions = {}):
     succeeded: 0,
     failed: 0,
     waiting: 0,
+    queue: [],
+    results: {},
     mode: getPlatformSettings(db, config).approvalMode,
     failures: [],
     startedAt: new Date().toISOString(),
@@ -125,8 +134,8 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
   }
 
   const appUrl = resolveTargetAppUrl(db, config);
-  const rows = db
-    .select({ id: requirements.id, title: requirements.title, status: requirements.status })
+  const allRows = db
+    .select({ id: requirements.id, title: requirements.title, status: requirements.status, sourceModule: requirements.sourceModule, createdAt: requirements.createdAt })
     .from(requirements)
     .where(
       and(
@@ -136,7 +145,14 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
         state.applicationId ? eq(requirements.applicationId, state.applicationId) : undefined
       )
     )
-    .all();
+    .all()
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // One requirement per screen/behaviour: re-analysis leaves older requirements
+  // for the same source module behind, and only the latest is what the page
+  // lists. Testing the superseded ones would duplicate work and tests.
+  const latest = new Map<string, (typeof allRows)[number]>();
+  for (const r of allRows) latest.set(r.sourceModule ?? r.id, r);
+  const rows = [...latest.values()];
 
   // Manual mode: every gate is a human's, so after analysis there is nothing
   // to run on their behalf - report what's waiting for approval and stop.
@@ -151,6 +167,7 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
     return;
   }
 
+  state.queue = rows.map((r) => r.id);
   Object.assign(state, { stage: "testing", total: rows.length, message: `Generating and running tests for ${rows.length} requirement${rows.length === 1 ? "" : "s"}` });
   for (const row of rows) {
     state.currentRequirementId = row.id;
@@ -158,10 +175,12 @@ async function runAutoRun(db: Db, config: Config, state: AutoRunState, opts: Aut
     if (isPipelineRunning(row.id)) {
       // Someone started this one by hand meanwhile - leave it to that run.
       state.completed++;
+      state.results[row.id] = "waiting";
       continue;
     }
     const result = await runRequirementPipeline(db, config, row.id, { kind: "auto" }, appUrl);
     state.completed++;
+    state.results[row.id] = result.stage === "done" ? "done" : result.stage === "waiting" ? "waiting" : "failed";
     if (result.stage === "done") state.succeeded++;
     else if (result.stage === "waiting") state.waiting++;
     else {

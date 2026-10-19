@@ -91,7 +91,7 @@ export function CodeAnalysis() {
   const { data: autoRun } = useQuery({
     queryKey: ["auto-run"],
     queryFn: api.getAutoRun,
-    refetchInterval: (query) => (query.state.data && (query.state.data.stage === "analyzing" || query.state.data.stage === "testing") ? 3000 : false),
+    refetchInterval: (query) => (query.state.data && (query.state.data.stage === "analyzing" || query.state.data.stage === "testing") ? 2000 : false),
   });
   const autoRunActive = !!autoRun && (autoRun.stage === "analyzing" || autoRun.stage === "testing");
   const startAutoRun = useMutation({
@@ -102,12 +102,40 @@ export function CodeAnalysis() {
       queryClient.invalidateQueries({ queryKey: ["code-features"] });
     },
   });
-  // Refresh rows and test runs as the auto run moves from one requirement to the next.
+  // Refresh rows and test runs as the auto run moves from one requirement to the
+  // next, and from one step (plan, generate, commit, run) to the next.
   useEffect(() => {
     if (!autoRun) return;
     queryClient.invalidateQueries({ queryKey: ["requirement"] });
     queryClient.invalidateQueries({ queryKey: ["test-runs"] });
-  }, [autoRun?.completed, autoRun?.stage, queryClient]);
+    queryClient.invalidateQueries({ queryKey: ["code-modules"] });
+    queryClient.invalidateQueries({ queryKey: ["code-features"] });
+  }, [autoRun?.completed, autoRun?.stage, autoRun?.current?.stage, queryClient]);
+
+  // What a row's badge says while (and after) an auto run handles its requirement.
+  // A requirement's own status lags behind the run: in Fully Automatic mode the
+  // scenarios are approved on creation but the requirement keeps saying "awaiting
+  // scenario approval" until the Planner starts - so rows still queued would look
+  // like they were missed.
+  const STEP_LABEL: Record<string, string> = {
+    approving: "approving scenarios",
+    planning: "planning",
+    generating: "generating tests",
+    committing: "committing",
+    running: "running tests",
+  };
+  const runBadge = (requirementId: string | null): { status: string; label: string } | null => {
+    if (!autoRun || !requirementId || !autoRun.queue.includes(requirementId)) return null;
+    const outcome = autoRun.results[requirementId];
+    if (outcome === "done") return { status: "committed", label: "tested" };
+    if (outcome === "waiting") return { status: "awaiting_scenario_approval", label: "waiting for your approval" };
+    if (outcome === "failed") return { status: "failed", label: "could not finish" };
+    if (!autoRunActive) return null;
+    if (autoRun.currentRequirementId === requirementId) {
+      return { status: "running", label: STEP_LABEL[autoRun.current?.stage ?? "approving"] ?? "working" };
+    }
+    return { status: "queued", label: "queued" };
+  };
 
   const modules = data?.modules ?? [];
   const features = (featureData?.features ?? []).filter((f) => f.files.length > 0);
@@ -292,7 +320,10 @@ export function CodeAnalysis() {
                     </div>
                     <span className="shrink-0 flex items-center gap-3">
                       {r.requirementId ? (
-                        <StatusBadge status={r.requirementStatus ?? "submitted"} />
+                        <StatusBadge
+                          status={runBadge(r.requirementId)?.status ?? r.requirementStatus ?? "submitted"}
+                          label={runBadge(r.requirementId)?.label}
+                        />
                       ) : (
                         <span className={`text-xs ${r.analyzing ? "text-accent" : "text-muted-2"}`}>{r.analyzing ? "Analyzing..." : "Not yet analyzed"}</span>
                       )}

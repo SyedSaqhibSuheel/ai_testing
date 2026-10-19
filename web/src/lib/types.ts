@@ -117,6 +117,9 @@ export interface AutoRunState {
   waiting: number;
   mode: string;
   currentRequirementId?: string;
+  current?: PipelineState | null;
+  queue: string[];
+  results: Record<string, "done" | "waiting" | "failed">;
   failures: Array<{ requirementId: string; title: string; error: string }>;
   error?: string;
   startedAt: string;
